@@ -1,3 +1,4 @@
 yt-dlp>=2024.4.9 
 Pillow
 pyautogui
+selenium>=4.0.0
