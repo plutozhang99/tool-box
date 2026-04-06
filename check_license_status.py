@@ -9,12 +9,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import argparse
 import time
 import sys
 import os
-
-# 驾照号码
-LICENSE_NUMBER = "YOUR_LICENSE_NUMBER"
 
 # ANSI颜色代码
 class Colors:
@@ -60,7 +58,7 @@ def print_status_box(status):
     print(f"{Colors.BOLD}{color}║{padding_left}{status_text}{padding_right}║{Colors.ENDC}")
     print(f"{Colors.BOLD}{color}{border}{Colors.ENDC}\n")
 
-def check_license_status():
+def check_license_status(license_number: str):
     """检查驾照状态"""
     driver = None
     try:
@@ -104,9 +102,9 @@ def check_license_status():
         # 填写驾照号码
         print_success(f"找到 {len(inputs)} 个输入框")
         print_step("正在填写驾照号码...")
-        parts = LICENSE_NUMBER.split('-')
+        parts = license_number.split('-')
         if len(parts) != 3:
-            raise ValueError(f"驾照号码格式不正确: {LICENSE_NUMBER}")
+            raise ValueError(f"驾照号码格式不正确: {license_number}")
         
         for i, part in enumerate(parts):
             # 滚动到元素可见
@@ -124,7 +122,7 @@ def check_license_status():
             print_success(f"已填写第 {i+1} 部分: {part}")
             time.sleep(0.5)
         
-        print_success(f"已成功填写驾照号码: {LICENSE_NUMBER}")
+        print_success(f"已成功填写驾照号码: {license_number}")
         
         # 点击Next按钮 - 使用成功的方法
         print_step("正在点击Next按钮...")
@@ -200,8 +198,20 @@ def check_license_status():
             driver.quit()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="查询安大略省驾照状态")
+    parser.add_argument(
+        "license_number",
+        nargs="?",
+        default=os.environ.get("LICENSE_NUMBER"),
+        help="驾照号码，格式: XXXXX-XXXXX-XXXXX (也可通过 LICENSE_NUMBER 环境变量设置)",
+    )
+    args = parser.parse_args()
+
+    if not args.license_number:
+        parser.error("请提供驾照号码作为参数，或设置 LICENSE_NUMBER 环境变量")
+
     try:
-        status = check_license_status()
+        status = check_license_status(args.license_number)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\n\n用户中断操作")

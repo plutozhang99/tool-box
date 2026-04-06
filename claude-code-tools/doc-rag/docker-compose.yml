@@ -1,4 +1,4 @@
-# Example: deploy doc-rag for my-project internal docs
+# Example: deploy doc-rag for your project docs
 #
 # Usage:
 #   cp .env.example .env  # fill in API key
