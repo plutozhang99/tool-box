@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "claude-nexus": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "src/index.ts"],
+      "cwd": "."
+    }
+  }
+}
