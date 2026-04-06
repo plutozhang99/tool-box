@@ -13,7 +13,7 @@ MCP server enabling inter-session communication between Claude Code instances �
 │  │claude-nexus │ │     │  │claude-nexus │ │     │  │claude-nexus │ │
 │  │  MCP Server │ │     │  │  MCP Server │ │     │  │  MCP Server │ │
 │  └──────┬──────┘ │     │  └──────┬──────┘ │     │  └──────┬──────┘ │
-└─────────┼────────┘     └─────────┼────────┘     └──────��──┼────────┘
+└─────────┼────────┘     └─────────┼────────┘     └─────────┼────────┘
           │                        │                        │
           └────────────┬───────────┴────────────────────────┘
                        │
@@ -46,18 +46,23 @@ MCP server enabling inter-session communication between Claude Code instances �
 - Offline message queuing with 24h TTL
 - Auto-reconnect with exponential backoff
 
-## Quick Start
+---
 
-### 1. Install dependencies
+## Usage Mode A: Local Only (Same Machine)
+
+> All Claude Code sessions run on the same machine, communicating through a shared SQLite database. No server deployment needed.
+
+### Step 1: Clone and install
 
 ```bash
+git clone <this-repo-url>
 cd claude-nexus
 npm install
 ```
 
-### 2. Add to Claude Code MCP config
+### Step 2: Add to Claude Code MCP config
 
-Add to `~/.claude/settings.json` or project `.mcp.json`:
+Open `~/.claude/settings.json` (global) or your project's `.mcp.json` (project-level), and add this block. **Replace `/path/to/claude-nexus` with the actual absolute path where you cloned the repo.**
 
 ```json
 {
@@ -71,73 +76,171 @@ Add to `~/.claude/settings.json` or project `.mcp.json`:
 }
 ```
 
-### 3. Use in Claude Code sessions
-
-**Session 1 (CTO):**
-```
-Call nexus_register with role="cto", display_name="Tech Lead"
-Call nexus_broadcast with content="Sprint goal: implement user auth"
+For example, if you cloned to `/home/alice/tools/claude-nexus`, the args would be:
+```json
+"args": ["tsx", "/home/alice/tools/claude-nexus/src/index.ts"]
 ```
 
-**Session 2 (Frontend):**
+### Step 3: Restart Claude Code
+
+After saving the config, **restart Claude Code** (or start a new session). Claude Code loads MCP servers on startup — editing the config while a session is running won't take effect until restart.
+
+### Step 4: Use it
+
+Now in any Claude Code session, you can use the nexus tools. Here's a concrete example with 3 terminal windows:
+
+**Terminal 1 — open Claude Code and register as CTO:**
 ```
-Call nexus_register with role="frontend", display_name="FE Dev"
-Call nexus_read  → receives CTO's broadcast
-Call nexus_send with to_role="backend", content="What's the auth API format?"
+> Call nexus_register with role="cto", display_name="Tech Lead"
+> Call nexus_broadcast with content="Sprint goal: implement user auth"
 ```
 
-**Session 3 (Backend):**
+**Terminal 2 — open another Claude Code session and register as Frontend:**
 ```
-Call nexus_register with role="backend", display_name="BE Dev"
-Call nexus_read  → receives question from Frontend
-Call nexus_send with to_role="frontend", content="POST /api/auth/login {email, password}"
+> Call nexus_register with role="frontend", display_name="FE Dev"
+> Call nexus_read
+  → You'll see the CTO's broadcast message here
+> Call nexus_send with to_role="backend", content="What's the auth API format?"
 ```
 
-## MCP Tools
+**Terminal 3 — open yet another Claude Code session and register as Backend:**
+```
+> Call nexus_register with role="backend", display_name="BE Dev"
+> Call nexus_read
+  → You'll see both the CTO's broadcast AND Frontend's question
+> Call nexus_send with to_role="frontend", content="POST /api/auth/login {email, password}"
+```
+
+That's it for local usage. No server to deploy. All messages go through a shared SQLite file at `~/.claude-nexus/nexus.db`.
+
+---
+
+## Usage Mode B: Remote (Across Machines / Users)
+
+> Sessions on different machines communicate through a relay server. Messages are end-to-end encrypted — the relay server cannot read them.
+
+This requires two things:
+1. **Deploy the relay server** somewhere accessible to all participants
+2. **Connect each Claude Code session** to that relay server
+
+### Part 1: Deploy the Relay Server
+
+#### Option A: Deploy on a cloud server (VPS, EC2, etc.)
+
+**Step 1: SSH into your server and clone the repo:**
+```bash
+ssh your-server
+git clone <this-repo-url>
+cd claude-nexus
+npm install
+```
+
+**Step 2: Start the relay server:**
+```bash
+# Default port 3001
+npm run relay
+
+# Or specify a custom port
+RELAY_PORT=8080 npm run relay
+```
+
+The relay server is now running on port 3001 (or whatever you set). It's a WebSocket server — no HTTP routes, no web UI, just WebSocket.
+
+**Step 3: Make sure the port is open.**
+
+If you're on AWS, add an inbound rule to your security group for port 3001 (TCP). If you're using a firewall (ufw, iptables), open the port:
+```bash
+# Example with ufw
+sudo ufw allow 3001/tcp
+```
+
+**Step 4: (Recommended) Run it as a background service:**
+
+Use `pm2`, `systemd`, or `screen`/`tmux` so it doesn't die when you close SSH:
+
+```bash
+# With pm2
+npx pm2 start "npm run relay" --name claude-nexus-relay
+
+# With tmux
+tmux new -s relay
+npm run relay
+# Then Ctrl+B, D to detach
+```
+
+**Step 5: Note down the URL.** Your relay URL will be:
+```
+ws://YOUR_SERVER_IP:3001
+```
+If you set up TLS (nginx reverse proxy, etc.), it'll be:
+```
+wss://your-domain.com/path
+```
+
+#### Option B: Run relay locally (for testing)
+
+If you just want to test remote mode on your local machine:
+```bash
+npm run relay
+# Relay is now at ws://localhost:3001
+```
+
+### Part 2: Connect Claude Code Sessions to the Relay
+
+**Each participant** does the following:
+
+**Step 1: Make sure claude-nexus MCP is configured** (same as Local mode Step 2 above).
+
+**Step 2: In your Claude Code session, connect to the relay:**
+```
+> Call nexus_remote_connect with relay_url="ws://YOUR_SERVER_IP:3001"
+```
+
+This will output two values — **save them both**:
+- `peer_id` — your unique ID on the relay
+- `box_public_key` — your encryption public key
+
+**Step 3: Share your `peer_id` and `box_public_key` with other participants** (via Slack, email, whatever).
+
+**Step 4: Send a message to a remote peer:**
+```
+> Call nexus_remote_send with to_peer_id="THEIR_PEER_ID", to_peer_public_key="THEIR_PUBLIC_KEY", content="Hello from the other machine!"
+```
+
+**Step 5: Read incoming messages:**
+```
+> Call nexus_remote_read
+```
+
+That's it. Messages are encrypted before leaving your machine. The relay server only sees encrypted blobs.
+
+---
+
+## MCP Tools Reference
 
 | Tool | Description |
 |------|-------------|
-| `nexus_register` | Register session with a role |
-| `nexus_list_sessions` | Discover active sessions |
-| `nexus_send` | Send message to session or role |
-| `nexus_read` | Read unread messages |
-| `nexus_broadcast` | Broadcast to all/role |
-| `nexus_remote_connect` | Connect to relay server |
-| `nexus_remote_send` | Send E2E encrypted message |
-| `nexus_remote_read` | Read remote messages |
-
-## Remote Communication
-
-### Start the relay server
-
-```bash
-npm run relay
-# or with custom port:
-RELAY_PORT=3001 npm run relay
-```
-
-### Connect from Claude Code
-
-```
-Call nexus_remote_connect with relay_url="ws://localhost:3001"
-→ Returns your peer_id and box_public_key
-
-Share these with remote peers, then:
-Call nexus_remote_send with to_peer_id="...", to_peer_public_key="...", content="Hello!"
-```
+| `nexus_register` | Register this session with a role (e.g., `cto`, `frontend`, `backend`) |
+| `nexus_list_sessions` | List all currently active sessions |
+| `nexus_send` | Send a message to a specific session (by ID) or all sessions with a role |
+| `nexus_read` | Read all unread messages for this session |
+| `nexus_broadcast` | Send a message to all sessions, or all sessions with a specific role |
+| `nexus_remote_connect` | Connect to a relay server for cross-machine communication |
+| `nexus_remote_send` | Send an E2E encrypted message to a remote peer |
+| `nexus_remote_read` | Read messages received from remote peers |
 
 ## Configuration
 
-Environment variables:
+Environment variables (all optional):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXUS_DATA_DIR` | `~/.claude-nexus` | Data directory |
-| `NEXUS_HEARTBEAT_INTERVAL` | `30000` | Heartbeat interval (ms) |
-| `NEXUS_MESSAGE_TTL` | `86400000` | Message expiry (ms, 24h) |
-| `NEXUS_STALE_TIMEOUT` | `120000` | Stale session timeout (ms) |
-| `NEXUS_RELAY_URL` | none | Default relay server URL |
-| `RELAY_PORT` | `3001` | Relay server port |
+| `NEXUS_DATA_DIR` | `~/.claude-nexus` | Where SQLite DB and identity keys are stored |
+| `NEXUS_HEARTBEAT_INTERVAL` | `30000` | How often sessions ping (ms) |
+| `NEXUS_MESSAGE_TTL` | `86400000` | How long messages live before expiry (ms, default 24h) |
+| `NEXUS_STALE_TIMEOUT` | `120000` | When to consider a session dead (ms) |
+| `NEXUS_RELAY_URL` | _(none)_ | Auto-connect to this relay on startup |
+| `RELAY_PORT` | `3001` | Relay server listen port |
 
 ## Development
 
@@ -151,8 +254,8 @@ npm run build         # Build TypeScript
 
 ## Security
 
-- Local: SQLite with WAL mode, file system permissions
-- Remote: Ed25519 authentication, NaCl box E2E encryption
-- Identity keys stored at `~/.claude-nexus/identity/` with 0600 permissions
-- Relay server sees only encrypted blobs
-- Rate limiting on relay (100 msg/min per peer)
+- **Local:** SQLite with WAL mode, file system permissions protect the DB
+- **Remote:** Ed25519 authentication + NaCl box E2E encryption
+- Identity keys auto-generated at `~/.claude-nexus/identity/` with `0600` permissions
+- Relay server never sees plaintext — only encrypted blobs
+- Rate limiting: 100 messages/min per peer on relay
