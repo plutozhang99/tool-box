@@ -1,9 +1,6 @@
 import nacl from 'tweetnacl';
-import {
-  encodeBase64,
-  decodeBase64,
-  decodeUTF8,
-} from 'tweetnacl-util';
+import tweetnaclUtil from 'tweetnacl-util';
+const { encodeBase64, decodeBase64, decodeUTF8 } = tweetnaclUtil;
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.js';

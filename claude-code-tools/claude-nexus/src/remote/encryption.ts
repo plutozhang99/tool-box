@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import nacl from 'tweetnacl';
-import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
+import tweetnaclUtil from 'tweetnacl-util';
+const { encodeBase64, decodeBase64 } = tweetnaclUtil;
 
 export interface EncryptedPayload {
   readonly nonce: string;

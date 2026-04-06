@@ -1,5 +1,6 @@
 import nacl from 'tweetnacl';
-import { decodeBase64, decodeUTF8, encodeBase64 } from 'tweetnacl-util';
+import tweetnaclUtil from 'tweetnacl-util';
+const { decodeBase64, decodeUTF8, encodeBase64 } = tweetnaclUtil;
 import { randomBytes } from 'node:crypto';
 
 export function generateNonce(): string {
