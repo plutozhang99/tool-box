@@ -62,7 +62,7 @@ npm install
 
 ### Step 2: Add to Claude Code MCP config
 
-Open `~/.claude/settings.json` (global) or your project's `.mcp.json` (project-level), and add this block. **Replace `/path/to/claude-nexus` with the actual absolute path where you cloned the repo.**
+Add the following to your **project's `.mcp.json`** file. Replace `/path/to/claude-nexus` with the actual absolute path where you cloned the repo, and set `NEXUS_DATA_DIR` to a project-specific path.
 
 ```json
 {
@@ -70,15 +70,31 @@ Open `~/.claude/settings.json` (global) or your project's `.mcp.json` (project-l
     "claude-nexus": {
       "type": "stdio",
       "command": "npx",
-      "args": ["tsx", "/path/to/claude-nexus/src/index.ts"]
+      "args": ["tsx", "/path/to/claude-nexus/src/index.ts"],
+      "env": {
+        "NEXUS_DATA_DIR": "~/.claude-nexus/my-project"
+      }
     }
   }
 }
 ```
 
-For example, if you cloned to `/home/alice/tools/claude-nexus`, the args would be:
+**`NEXUS_DATA_DIR` is required.** Each project must have its own data directory to prevent cross-project message leakage. The server will refuse to start without it.
+
+For example, if you cloned to `/home/alice/tools/claude-nexus` and your project is called `my-app`:
 ```json
-"args": ["tsx", "/home/alice/tools/claude-nexus/src/index.ts"]
+{
+  "mcpServers": {
+    "claude-nexus": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "/home/alice/tools/claude-nexus/src/index.ts"],
+      "env": {
+        "NEXUS_DATA_DIR": "~/.claude-nexus/my-app"
+      }
+    }
+  }
+}
 ```
 
 ### Step 3: Restart Claude Code
@@ -220,27 +236,39 @@ That's it. Messages are encrypted before leaving your machine. The relay server 
 
 | Tool | Description |
 |------|-------------|
-| `nexus_register` | Register this session with a role (e.g., `cto`, `frontend`, `backend`) |
+| `nexus_register` | Register this session with a role. Reports any orphan messages from previous sessions. |
 | `nexus_list_sessions` | List all currently active sessions |
 | `nexus_send` | Send a message to a specific session (by ID) or all sessions with a role |
 | `nexus_read` | Read all unread messages for this session |
 | `nexus_broadcast` | Send a message to all sessions, or all sessions with a specific role |
+| `nexus_status` | Show database status: session count, message counts, DB size, oldest message |
+| `nexus_cleanup` | Delete orphan messages left by expired sessions |
 | `nexus_remote_connect` | Connect to a relay server for cross-machine communication |
 | `nexus_remote_send` | Send an E2E encrypted message to a remote peer |
 | `nexus_remote_read` | Read messages received from remote peers |
 
 ## Configuration
 
-Environment variables (all optional):
+### MCP Server (Client-side)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NEXUS_DATA_DIR` | `~/.claude-nexus` | Where SQLite DB and identity keys are stored |
-| `NEXUS_HEARTBEAT_INTERVAL` | `30000` | How often sessions ping (ms) |
-| `NEXUS_MESSAGE_TTL` | `86400000` | How long messages live before expiry (ms, default 24h) |
-| `NEXUS_STALE_TIMEOUT` | `120000` | When to consider a session dead (ms) |
-| `NEXUS_RELAY_URL` | _(none)_ | Auto-connect to this relay on startup |
-| `RELAY_PORT` | `3001` | Relay server listen port |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NEXUS_DATA_DIR` | **Yes** | _(none)_ | Directory for SQLite DB, identity keys, and notifications. Must be unique per project to ensure data isolation. |
+| `NEXUS_HEARTBEAT_INTERVAL` | No | `30000` | How often sessions send a heartbeat ping, in milliseconds. |
+| `NEXUS_STALE_TIMEOUT` | No | `120000` | Time without heartbeat before a session is considered dead and pruned, in milliseconds. |
+| `NEXUS_NOTIFY_DEBOUNCE` | No | `100` | Debounce interval for file-based notifications, in milliseconds. |
+| `NEXUS_LOG_LEVEL` | No | `info` | Logging verbosity. One of: `debug`, `info`, `warn`, `error`. |
+| `NEXUS_RELAY_URL` | No | _(none)_ | Auto-connect to this WebSocket relay server on startup. |
+
+### Relay Server
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `RELAY_PORT` | No | `3001` | TCP port the relay server listens on. |
+| `RELAY_MESSAGE_TTL` | No | `86400000` | How long queued messages for offline peers are retained, in milliseconds (default 24h). |
+| `RELAY_RATE_LIMIT` | No | `100` | Maximum messages per minute per peer. |
+| `RELAY_MAX_PENDING_AUTH` | No | `200` | Maximum number of unauthenticated connections waiting to complete the auth handshake. |
+| `RELAY_MAX_PAYLOAD` | No | `65536` | Maximum WebSocket message payload size in bytes (64 KB). |
 
 ## Development
 
@@ -250,6 +278,51 @@ npm run test:watch    # Watch mode
 npm run dev           # Run MCP server (stdio)
 npm run relay         # Run relay server
 npm run build         # Build TypeScript
+```
+
+## Data Storage and Cleanup
+
+### Where data is stored
+
+Each project stores its data in the directory specified by `NEXUS_DATA_DIR`:
+
+```
+~/.claude-nexus/my-project/
+├── nexus.db              # SQLite database (sessions + messages)
+├── nexus.db-wal          # Write-ahead log (SQLite WAL mode)
+├── nexus.db-shm          # WAL shared memory
+├── identity/
+│   └── keypair.json      # Ed25519 keypair for remote mode (0600 permissions)
+└── notify/
+    └── {session-id}      # File-based notification sentinels
+```
+
+### Automatic cleanup (sessions only)
+
+| What | When | Trigger |
+|------|------|---------|
+| **Stale sessions** | No heartbeat within timeout (default 2 min) | Every heartbeat cycle while any session is active |
+| **Dead PID sessions** | Process no longer running | On startup when any nexus MCP server starts |
+
+### Message cleanup (user-controlled)
+
+Messages are **never automatically deleted**. When you start a new session, `nexus_register` will report any orphan messages (unread messages from sessions that no longer exist):
+
+```
+⚠ Found 12 unread message(s) from 2 expired session(s).
+Use nexus_read to review them, or nexus_cleanup to delete them.
+```
+
+You can then:
+- **`nexus_read`** — review the messages to see if they contain useful context
+- **`nexus_cleanup`** — delete all orphan messages
+
+### Manual cleanup
+
+To completely reset a project's nexus state:
+
+```bash
+rm -rf ~/.claude-nexus/my-project/    # Remove entire project data directory
 ```
 
 ## Security

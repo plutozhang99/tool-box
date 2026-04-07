@@ -16,7 +16,8 @@ import {
   sendMessage,
   broadcastMessage,
   readMessages,
-  purgeOldMessages,
+  findOrphanMessages,
+  deleteOrphanMessages,
 } from './local/message-bus.js';
 import { watchForNotifications } from './local/notifier.js';
 import { getOrCreateIdentity, publicKeyToBase64 } from './remote/identity.js';
@@ -25,7 +26,7 @@ import { RemoteBus } from './remote/remote-bus.js';
 import { setupCleanup } from './utils/cleanup.js';
 import { logger, setSessionContext } from './utils/logger.js';
 import { MAX_CONTENT_LENGTH, MAX_ROLE_LENGTH, MAX_DISPLAY_NAME_LENGTH } from './types.js';
-import type { MessageType } from './types.js';
+import type { MessageType, Session, OrphanSummary } from './types.js';
 
 // --- State ---
 const config = loadConfig();
@@ -79,12 +80,11 @@ server.tool(
       currentSessionRole = role;
       setSessionContext(session.id);
 
-      // Start heartbeat
+      // Start heartbeat (message cleanup is manual via nexus_cleanup)
       heartbeatTimer = setInterval(() => {
         if (currentSessionId) {
           heartbeat(db, currentSessionId);
           pruneStale(db, config.staleSessionTimeout);
-          purgeOldMessages(db, config.messageTtl);
         }
       }, config.heartbeatInterval);
 
@@ -101,17 +101,31 @@ server.tool(
         config.notifyDebounceMs,
       );
 
+      // Check for orphan messages from previous sessions
+      const orphans = findOrphanMessages(db);
+
+      const result: {
+        status: string;
+        session: Session;
+        message: string;
+        orphan_messages?: OrphanSummary;
+        warning?: string;
+      } = {
+        status: 'registered',
+        session,
+        message: `Session registered as "${role}"${display_name ? ` (${display_name})` : ''}. You can now send/receive messages.`,
+      };
+
+      if (orphans.count > 0) {
+        result.orphan_messages = orphans;
+        result.warning =
+          `Found ${orphans.count} unread message(s) from ${orphans.sources.length} expired session(s). ` +
+          'These are leftover from previous sessions. ' +
+          'Use nexus_read to review them, or nexus_cleanup to delete them.';
+      }
+
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({
-              status: 'registered',
-              session,
-              message: `Session registered as "${role}"${display_name ? ` (${display_name})` : ''}. You can now send/receive messages.`,
-            }),
-          },
-        ],
+        content: [{ type: 'text' as const, text: JSON.stringify(result) }],
       };
     } finally {
       registering = false;
@@ -149,14 +163,14 @@ server.tool(
   'nexus_send',
   'Send a message to another session by session ID or role. Use to_role to message all sessions with that role (e.g., "backend"). Use to_session_id for direct messages. Supports request/response threading via in_reply_to.',
   {
-    to_session_id: z.string().optional().describe('Target session ID for direct message'),
+    to_session_id: z.string().uuid().optional().describe('Target session ID for direct message'),
     to_role: z.string().max(MAX_ROLE_LENGTH).optional().describe('Target role (sends to all sessions with this role)'),
     content: z.string().max(MAX_CONTENT_LENGTH).describe('Message content'),
     message_type: z
       .enum(['chat', 'request', 'response'])
       .default('chat')
       .describe('Message type: chat (general), request (asking a question), response (answering)'),
-    in_reply_to: z.string().optional().describe('Message ID this is replying to'),
+    in_reply_to: z.string().uuid().optional().describe('Message ID this is replying to'),
   },
   async ({ to_session_id, to_role, content, message_type, in_reply_to }) => {
     if (!currentSessionId) {
@@ -249,6 +263,93 @@ server.tool(
             status: 'broadcast',
             recipients: sent.length,
             messages: sent,
+          }),
+        },
+      ],
+    };
+  },
+);
+
+// ===== TOOL: nexus_status =====
+server.tool(
+  'nexus_status',
+  'Show database status: active sessions, message counts (total, unread, orphan), database file size, and oldest message age. Useful for monitoring data accumulation.',
+  {},
+  async () => {
+    const dbPath = join(config.dataDir, 'nexus.db');
+    const { size: dbSizeBytes } = await import('node:fs').then((fs) => fs.statSync(dbPath));
+
+    const counts = db
+      .prepare(
+        `SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
+           MIN(created_at) AS oldest
+         FROM messages`,
+      )
+      .get() as { total: number; unread: number; oldest: string | null };
+
+    const orphanCount = db
+      .prepare(
+        `SELECT COUNT(*) AS cnt FROM messages m
+         LEFT JOIN sessions s ON m.from_session_id = s.id
+         WHERE m.read_at IS NULL AND s.id IS NULL`,
+      )
+      .get() as { cnt: number };
+
+    const sessionCount = db
+      .prepare('SELECT COUNT(*) AS cnt FROM sessions')
+      .get() as { cnt: number };
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({
+            database_size_kb: Math.round(dbSizeBytes / 1024),
+            active_sessions: sessionCount.cnt,
+            messages: {
+              total: counts.total,
+              unread: counts.unread,
+              orphan: orphanCount.cnt,
+              read: counts.total - counts.unread,
+            },
+            oldest_message: counts.oldest,
+          }),
+        },
+      ],
+    };
+  },
+);
+
+// ===== TOOL: nexus_cleanup =====
+server.tool(
+  'nexus_cleanup',
+  'Delete orphan messages left by expired sessions. These are unread messages whose sender session no longer exists. Call this after reviewing orphan messages reported during nexus_register.',
+  {},
+  async () => {
+    if (!currentSessionId) {
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Not registered. Call nexus_register first.' }) }],
+      };
+    }
+
+    const orphans = findOrphanMessages(db);
+    if (orphans.count === 0) {
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ status: 'clean', message: 'No orphan messages found.' }) }],
+      };
+    }
+
+    const deleted = deleteOrphanMessages(db);
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({
+            status: 'cleaned',
+            orphan_messages_deleted: deleted,
+            message: `Deleted ${deleted} orphan message(s) from expired sessions.`,
           }),
         },
       ],

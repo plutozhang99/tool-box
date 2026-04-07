@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
-import type { Message, MessageType } from '../types.js';
+import type { Message, MessageType, OrphanSummary } from '../types.js';
 import { MessageTypeSchema } from '../types.js';
 import { notifySession } from './notifier.js';
 import { listSessions, getSession } from './session-registry.js';
@@ -130,9 +130,37 @@ export function readMessages(
   return messages;
 }
 
-export function purgeOldMessages(db: Database.Database, ttlMs: number): number {
-  const cutoff = new Date(Date.now() - ttlMs).toISOString();
-  const result = db.prepare('DELETE FROM messages WHERE created_at < ?').run(cutoff);
+export function findOrphanMessages(db: Database.Database): OrphanSummary {
+  const rows = db
+    .prepare(
+      `SELECT m.from_session_id, MIN(m.created_at) AS oldest_created_at, COUNT(*) AS message_count
+       FROM messages m
+       LEFT JOIN sessions s ON m.from_session_id = s.id
+       WHERE m.read_at IS NULL AND s.id IS NULL
+       GROUP BY m.from_session_id`,
+    )
+    .all() as Array<{ from_session_id: string; oldest_created_at: string; message_count: number }>;
+
+  const totalCount = rows.reduce((sum, r) => sum + r.message_count, 0);
+
+  return {
+    count: totalCount,
+    sources: rows.map((r) => ({
+      from_session_id: r.from_session_id,
+      message_count: r.message_count,
+      oldest_created_at: r.oldest_created_at,
+    })),
+  };
+}
+
+export function deleteOrphanMessages(db: Database.Database): number {
+  const result = db
+    .prepare(
+      `DELETE FROM messages
+       WHERE read_at IS NULL
+         AND from_session_id NOT IN (SELECT id FROM sessions)`,
+    )
+    .run();
   return result.changes;
 }
 

@@ -13,6 +13,9 @@ const SCHEMA = `
     last_heartbeat TEXT NOT NULL
   );
 
+  -- No FK on from_session_id: orphan messages are retained intentionally
+  -- after sender sessions are pruned, so users can review them via nexus_read
+  -- before deciding to delete them via nexus_cleanup.
   CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     from_session_id TEXT NOT NULL,
@@ -22,8 +25,7 @@ const SCHEMA = `
     message_type TEXT NOT NULL DEFAULT 'chat',
     in_reply_to TEXT,
     created_at TEXT NOT NULL,
-    read_at TEXT,
-    FOREIGN KEY (from_session_id) REFERENCES sessions(id)
+    read_at TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_to_session ON messages(to_session_id, read_at);
@@ -46,7 +48,6 @@ export function createDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
-  db.pragma('foreign_keys = ON');
 
   db.exec(SCHEMA);
 

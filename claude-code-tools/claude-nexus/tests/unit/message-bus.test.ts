@@ -3,12 +3,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createDatabase, closeDatabase } from '../../src/local/database.js';
-import { registerSession } from '../../src/local/session-registry.js';
+import { registerSession, deregisterSession } from '../../src/local/session-registry.js';
 import {
   sendMessage,
   readMessages,
   broadcastMessage,
-  purgeOldMessages,
+  findOrphanMessages,
+  deleteOrphanMessages,
 } from '../../src/local/message-bus.js';
 import type Database from 'better-sqlite3';
 
@@ -126,20 +127,40 @@ describe('message-bus', () => {
     expect(answer[0]!.message_type).toBe('response');
   });
 
-  it('purges old messages', () => {
+  it('finds orphan messages from expired sessions', () => {
     const sender = registerSession(db, 'cto');
-    const receiver = registerSession(db, 'backend');
+    const receiver = registerSession(db, 'frontend');
 
     sendMessage(db, tempDir, sender.id, {
       toSessionId: receiver.id,
-      content: 'Old message',
+      content: 'This will become orphaned',
     });
 
-    // Set message to 2 days ago
-    db.prepare("UPDATE messages SET created_at = datetime('now', '-2 days')").run();
+    // Remove sender — message becomes orphaned
+    deregisterSession(db, sender.id);
 
-    const purged = purgeOldMessages(db, 86400000); // 24h
-    expect(purged).toBe(1);
+    const orphans = findOrphanMessages(db);
+    expect(orphans.count).toBe(1);
+    expect(orphans.sources).toHaveLength(1);
+    expect(orphans.sources[0]!.from_session_id).toBe(sender.id);
+  });
+
+  it('deletes orphan messages', () => {
+    const sender = registerSession(db, 'cto');
+    const receiver = registerSession(db, 'frontend');
+
+    sendMessage(db, tempDir, sender.id, {
+      toSessionId: receiver.id,
+      content: 'Will be cleaned up',
+    });
+
+    deregisterSession(db, sender.id);
+
+    const deleted = deleteOrphanMessages(db);
+    expect(deleted).toBe(1);
+
+    const orphans = findOrphanMessages(db);
+    expect(orphans.count).toBe(0);
   });
 
   it('throws when neither to_session_id nor to_role provided', () => {

@@ -41,6 +41,15 @@ export const MessageSchema = z.object({
 });
 export type Message = z.infer<typeof MessageSchema>;
 
+export interface OrphanSummary {
+  readonly count: number;
+  readonly sources: ReadonlyArray<{
+    readonly from_session_id: string;
+    readonly message_count: number;
+    readonly oldest_created_at: string;
+  }>;
+}
+
 // --- Tool Input Schemas ---
 export const RegisterSessionInputSchema = z.object({
   role: RoleSchema,
@@ -147,7 +156,6 @@ export const IncomingRelayMessageSchema = z.discriminatedUnion('type', [
 export interface NexusConfig {
   readonly dataDir: string;
   readonly heartbeatInterval: number;
-  readonly messageTtl: number;
   readonly relayUrl: string | null;
   readonly staleSessionTimeout: number;
   readonly notifyDebounceMs: number;
