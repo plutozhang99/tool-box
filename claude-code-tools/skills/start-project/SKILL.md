@@ -14,11 +14,23 @@ You are now acting as **CTO**. Your role is to coordinate all work, judge delive
 
 ---
 
+## Recovery Protocol
+
+Before Phase 0, check for `docs/progress/PROGRESS.md`:
+
+| Condition | Mode | Action |
+|-----------|------|--------|
+| PROGRESS.md exists AND `## Interruption Reason` = `rate-limit-5h` or `rate-limit-7d` or `context-limit` | **Mode A — Continuation** | Read PROGRESS.md, restore state, execute `## Next Agent Prompt` directly. No re-planning, no user confirmation. Clear `## Interruption Reason` and `## Rate Limit State` after successful resume. |
+| PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. Then run Phase 0 steps 3–9, present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
+| PROGRESS.md not found | **Fresh Start** | Run full Phase 0 normally. |
+
+---
+
 ## Phase 0: Session Initialization
 
 Execute in this order:
 
-1. **Read `{path}`** — identify what it is and what task it requires
+1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
 2. **Check Agent Teams availability**: test if `TeamCreate` tool is accessible
    - Available → prefer Teams for coordinated parallel work (review teams, parallel dev)
    - Not available → use individual sub-agents with explicit context passing
@@ -141,11 +153,28 @@ Round 3 decision + full rationale must be recorded in PROGRESS.md.
 
 ## Progress File Format
 
-Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is the recovery document if context resets.
+Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is the sole recovery document.
 
 ```markdown
 ## Project: [name]
+
+## Spec Files
+<!-- Source of truth for re-planning. List all original spec/PRD/design files. -->
+- [path/to/prd.md]
+- [path/to/design.md]
+- [path/to/any-other-spec.md]
+
 ## Current Phase: [phase name]
+
+## Interruption Reason
+<!-- Set ONLY when work is paused by the system. Clear after successful resume. -->
+<!-- Values: rate-limit-5h | rate-limit-7d | context-limit | (blank = no interruption) -->
+
+
+## Rate Limit State
+<!-- Filled only when Interruption Reason = rate-limit-5h. Clear after resume. -->
+<!-- refresh_at: [ISO timestamp of next quota reset] -->
+
 
 ## Review Roster (set in Phase 0, do not change mid-project)
 固定:
@@ -161,7 +190,10 @@ Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is t
 - Slot 9 Clinical Review: [healthcare-reviewer / N/A]
 
 ## Active Task
+<!-- Include sub-task progress so Mode A can resume mid-task. -->
 [task name] — assigned to: [agent type]
+Sub-task progress: [what is done within this task / what remains]
+Relevant files: [list of files being modified]
 
 ## Completed Tasks
 - [x] Task name — commit: abc1234 — code ✅ sec ✅ func ✅
@@ -181,15 +213,14 @@ Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is t
 - [date] Decision: ... Rationale: ...
 - [date] Risk accepted: ... Reason: ...
 
-## Session Rules (copy here for recovery)
+## Session Rules
 - Model assignment, review protocol, and escalation rules as defined in this skill
 - Current CTO instructions: [any session-specific overrides]
 
 ## Next Agent Prompt
-[Exact prompt ready to paste to resume work after context reset]
-
-## Context Budget
-[Approximate % used — update at each checkpoint — STOP new multi-file tasks at 80%]
+<!-- Required content: project name + path, task to resume, relevant files,
+     Review Roster summary, key decisions summary. Must be fully self-contained. -->
+[Exact prompt — no external context assumed]
 ```
 
 ---
@@ -229,32 +260,48 @@ Before every commit, git-agent **must** run `git diff --staged` and scan for the
 - `## Next Agent Prompt` must always be current and self-contained for recovery
 - Operate autonomously without user approval between steps — except:
   - **Phase 0** verification (before any code is written)
-  - **80% context** checkpoint
+  - **90% context** checkpoint
   - **Round 3 escalation** (CTO decision required)
 
-### 80% Context Threshold Protocol
+### 90% Context Threshold
 
-When context usage reaches **80%**, execute the following sequence immediately — do NOT start any new agent:
+When context reaches **90%**:
 
-1. **Freeze agent spawning** — complete the current in-flight agent if already running; do not launch anything new
-2. **Flush PROGRESS.md** — ensure all sections are up to date, especially:
-   - `## Active Task` — exact state of what was in progress
-   - `## Pending Tasks` — full prioritized list
-   - `## Next Agent Prompt` — a complete, self-contained prompt that can resume work with zero additional context
-3. **Resume via `/loop`**:
-   - If already running inside a `/loop` session: call `ScheduleWakeup` with `delaySeconds: 120` so the next iteration starts with a fresh, compacted context window
-   - If NOT in a `/loop` session: output the following message to the user and stop:
+1. **Freeze agent spawning** — let the current in-flight agent finish; spawn nothing new
+2. **Flush PROGRESS.md** — set `## Interruption Reason: context-limit`, ensure `## Active Task` sub-task progress is accurate, ensure `## Next Agent Prompt` is complete and self-contained
+3. **Notify user** and stop:
 
-     > **⚠️ Context at 80% — pausing agent work**
-     > PROGRESS.md has been updated. To continue in a fresh context window, run:
-     >
-     > ```
-     > /loop <paste the "## Next Agent Prompt" content here>
-     > ```
-     >
-     > `/loop` will self-pace iterations and resume automatically after context compaction.
+   > **⚠️ Context at 90% — agent work paused**
+   > PROGRESS.md updated. Resume by running:
+   > `/start-project docs/progress/PROGRESS.md`
 
-**Why `/loop` and not `/compact`:** `/compact` compresses the current window but does not restart the orchestration loop. `/loop` gives the CTO a clean slate each iteration while preserving task state in PROGRESS.md.
+---
+
+## Rate Limit Handling
+
+### 5-Hour Usage Limit — at 80% consumed
+
+1. **Freeze agent spawning** — let current in-flight agent finish
+2. Run `date` to capture current system time
+3. Extract next refresh timestamp from the rate limit error/response
+4. Compute `wait_seconds = refresh_time − now`
+5. **Flush PROGRESS.md** — set `## Interruption Reason: rate-limit-5h`, set `## Rate Limit State: refresh_at: [timestamp]`
+6. Ensure `## Next Agent Prompt` is complete
+7. Call `ScheduleWakeup(delaySeconds: wait_seconds, prompt: "<<autonomous-loop-dynamic>>")` — **only one ScheduleWakeup may be active at a time**; if one already exists, cancel it before setting a new one
+8. On wake-up: enter **Mode A (Continuation)** automatically — no user input needed
+
+### 7-Day Subscription Limit — at 90% consumed
+
+1. **Freeze agent spawning** immediately
+2. **Flush PROGRESS.md** — set `## Interruption Reason: rate-limit-7d`
+3. Notify user and stop:
+
+   > **⚠️ 7-day quota at 90% — agent work paused**
+   > Remaining quota preserved. PROGRESS.md updated.
+   > Resume when quota resets by running:
+   > `/start-project docs/progress/PROGRESS.md`
+
+4. Do **not** set ScheduleWakeup — 7-day reset timing is unpredictable; wait for user to resume manually
 
 ---
 
