@@ -200,6 +200,27 @@ Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is t
 - Commit only after ALL three review statuses are PASS (or formally escalated with recorded rationale)
 - Format: `<type>: <description>` (conventional commits — feat, fix, refactor, docs, test, chore)
 
+### Pre-Commit Secret Scan (mandatory)
+
+Before every commit, git-agent **must** run `git diff --staged` and scan for the following patterns. If any match is found, **abort the commit immediately** and escalate to CTO.
+
+| Category | Patterns to detect |
+|----------|--------------------|
+| API keys | `sk-`, `AIza`, `AKIA`, `xoxb-`, `xoxp-`, `ghp_`, `gho_`, `github_pat_` |
+| Secrets / passwords | variable names containing `secret`, `password`, `passwd`, `pwd`, `token`, `api_key`, `apikey`, `auth_key` assigned to a string literal |
+| Private keys | `-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN OPENSSH PRIVATE KEY-----` |
+| Connection strings | `mongodb+srv://`, `postgres://`, `mysql://` containing credentials (i.e., `://user:pass@`) |
+| `.env` files | Any staged file named `.env`, `.env.local`, `.env.production`, `*.pem`, `*.p12`, `*.pfx` |
+
+**Escalation on detection:**
+
+1. git-agent aborts the commit and reports the exact file + line to CTO
+2. CTO uses **security-reviewer** agent (sonnet) to assess severity
+3. If confirmed sensitive: remove from staging (`git reset HEAD <file>`), rotate the exposed secret, then re-commit
+4. Record the incident in PROGRESS.md under `## Key Decisions & Accepted Risks`
+
+**False positive handling:** If git-agent flags a pattern that is clearly a placeholder (e.g., `"your-api-key-here"`), CTO may approve proceeding — decision must be recorded in PROGRESS.md.
+
 ---
 
 ## Context Window Management
