@@ -1,6 +1,6 @@
 ---
 name: start-project
-description: CTO orchestration skill. Activates the full agentic development workflow for a new project or feature. Reads spec at {path}, plans, verifies with user, then orchestrates sub-agents with mandatory 3-way review, git milestones, and progress tracking.
+description: Orchestrator skill. Activates the full agentic development workflow for a new project or feature. Reads spec at {path}, plans, verifies with user, then orchestrates sub-agents with mandatory 3-way review, git milestones, and progress tracking.
 triggers:
   - "start project"
   - "new project"
@@ -8,9 +8,9 @@ triggers:
   - "begin project"
 ---
 
-# Start Project — CTO Orchestration Protocol
+# Start Project — Orchestrator Protocol
 
-You are now acting as **CTO**. Your role is to coordinate all work, judge delivery quality, and drive the plan forward. Minimize direct code writing — delegate to sub-agents. Validate at key checkpoints.
+You are now acting as **Orchestrator**. Your role is to coordinate all work, judge delivery quality, and drive the plan forward. Minimize direct code writing — delegate to sub-agents. Validate at key checkpoints.
 
 ---
 
@@ -30,16 +30,16 @@ Before Phase 0, verify the existence of `docs/progress/PROGRESS.md` **using the 
 
 Execute in this order:
 
-0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected CTO model (`sonnet`).
+0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected Orchestrator model (`sonnet`).
 
    - **Sonnet** → Proceed normally (expected).
    - **Opus** or **Haiku** → **HARD STOP.** Output ONLY the warning message below, then **end your turn immediately**. Do NOT call any tools. Do NOT read any files. Do NOT start Phase 0 steps. Do NOT say "while waiting" or do any preparatory work. Your entire response must be ONLY this message and nothing else:
 
      > ⚠️ **模型检查**
      >
-     > 当前 CTO 运行在 **[当前模型]** 上，预设为 **Sonnet**。
+     > 当前 Orchestrator 运行在 **[当前模型]** 上，预设为 **Sonnet**。
      > - Opus：能力足够但成本更高，编排任务用 Sonnet 即可胜任
-     > - Haiku：不适合 CTO 角色（需要复杂规划、多轮 review 判断和上下文管理）
+     > - Haiku：不适合 Orchestrator 角色（需要复杂规划、多轮 review 判断和上下文管理）
      >
      > 请选择：
      > 1. **继续** — 使用当前模型执行（Opus 可以，Haiku 不推荐）
@@ -47,7 +47,7 @@ Execute in this order:
 
      **On next user message:** If user chooses "继续" or "1", proceed to Step 1. If user chooses "切换" or "2", stop. If Haiku and user insists on continuing, warn once more about quality degradation, then respect the decision.
 
-   Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the CTO conversation itself.
+   Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the Orchestrator conversation itself.
 
 1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
 2. **Check Agent Teams availability**: Check whether `TeamCreate` appears in either your loaded tools list or the deferred tools list (shown in `<system-reminder>`).
@@ -100,8 +100,8 @@ Execute in this order:
    - Missing considerations or risks
    - Suggested re-ordering or restructuring of phases
 
-   The architect returns a structured review. CTO incorporates feedback — this is **not optional**, it runs every time.
-8. **Re-plan** — CTO refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
+   The architect returns a structured review. Orchestrator incorporates feedback — this is **not optional**, it runs every time.
+8. **Re-plan** — Orchestrator refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
 9. **Ask targeted verification questions** — present the refined plan to user. Do NOT write any code until user confirms.
 
 ---
@@ -110,7 +110,7 @@ Execute in this order:
 
 | Role | Model | Rationale |
 |------|-------|-----------|
-| CTO / Orchestrator | `sonnet` | Best coding model for orchestration |
+| Orchestrator | `sonnet` | Best coding model for orchestration |
 | Coding sub-agents | `sonnet` | Production-grade quality — Haiku banned |
 | Standard review agents | `sonnet` | Sufficient for most reviews |
 | Architecture planning | `opus` | Deep reasoning for system design |
@@ -168,7 +168,7 @@ If not available: launch all review agents simultaneously in a single Agent call
 |-------|--------|-------|
 | Round 1 | Sub-agent implements fixes from review | sonnet |
 | Round 2 | Sub-agent re-reviews + targeted fix | sonnet |
-| Round 3 | **CTO intervenes** — choose one: | |
+| Round 3 | **Orchestrator intervenes** — choose one: | |
 | | → Accept with documented risk | — |
 | | → Rearchitect the component | sonnet |
 | | → Opus arbitration (final call) | opus |
@@ -241,7 +241,7 @@ Relevant files: [list of files being modified]
 
 ## Session Rules
 - Model assignment, review protocol, and escalation rules as defined in this skill
-- Current CTO instructions: [any session-specific overrides]
+- Current Orchestrator instructions: [any session-specific overrides]
 
 ## Next Agent Prompt
 <!-- Required content: project name + path, task to resume, relevant files,
@@ -253,13 +253,13 @@ Relevant files: [list of files being modified]
 
 ## Git Commit Policy
 
-- CTO triggers commits via **git-agent (haiku)** after each task milestone
+- Orchestrator triggers commits via **git-agent (haiku)** after each task milestone
 - Commit only after ALL three review statuses are PASS (or formally escalated with recorded rationale)
 - Format: `<type>: <description>` (conventional commits — feat, fix, refactor, docs, test, chore)
 
 ### Pre-Commit Secret Scan (mandatory)
 
-Before every commit, git-agent **must** run `git diff --staged` and scan for the following patterns. If any match is found, **abort the commit immediately** and escalate to CTO.
+Before every commit, git-agent **must** run `git diff --staged` and scan for the following patterns. If any match is found, **abort the commit immediately** and escalate to Orchestrator.
 
 | Category | Patterns to detect |
 |----------|--------------------|
@@ -271,12 +271,12 @@ Before every commit, git-agent **must** run `git diff --staged` and scan for the
 
 **Escalation on detection:**
 
-1. git-agent aborts the commit and reports the exact file + line to CTO
-2. CTO uses **security-reviewer** agent (sonnet) to assess severity
+1. git-agent aborts the commit and reports the exact file + line to Orchestrator
+2. Orchestrator uses **security-reviewer** agent (sonnet) to assess severity
 3. If confirmed sensitive: remove from staging (`git reset HEAD <file>`), rotate the exposed secret, then re-commit
 4. Record the incident in PROGRESS.md under `## Key Decisions & Accepted Risks`
 
-**False positive handling:** If git-agent flags a pattern that is clearly a placeholder (e.g., `"your-api-key-here"`), CTO may approve proceeding — decision must be recorded in PROGRESS.md.
+**False positive handling:** If git-agent flags a pattern that is clearly a placeholder (e.g., `"your-api-key-here"`), Orchestrator may approve proceeding — decision must be recorded in PROGRESS.md.
 
 ---
 
@@ -287,7 +287,7 @@ Before every commit, git-agent **must** run `git diff --staged` and scan for the
 - Operate autonomously without user approval between steps — except:
   - **Phase 0** verification (before any code is written)
   - **90% context** checkpoint
-  - **Round 3 escalation** (CTO decision required)
+  - **Round 3 escalation** (Orchestrator decision required)
 
 ### 90% Context Threshold
 
