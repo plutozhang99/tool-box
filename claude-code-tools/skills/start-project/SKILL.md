@@ -50,9 +50,9 @@ Execute in this order:
    Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the CTO conversation itself.
 
 1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
-2. **Check Agent Teams availability**: test if `TeamCreate` tool is accessible
-   - Available → prefer Teams for coordinated parallel work (review teams, parallel dev)
-   - Not available → use individual sub-agents with explicit context passing
+2. **Check Agent Teams availability**: Check whether `TeamCreate` appears in either your loaded tools list or the deferred tools list (shown in `<system-reminder>`).
+   - **Found (loaded or deferred)** → Teams is available. If deferred, call `ToolSearch(query: "select:TeamCreate,TeamDelete")` immediately to load the schema before proceeding. Then **MUST use Teams** for all coordinated parallel work (review teams, parallel dev). Do NOT fall back to individual agents for parallel tasks.
+   - **Not found anywhere** → Teams unavailable. Use individual sub-agents with explicit context passing.
 3. **Detect project language(s)** — scan file extensions, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, etc.
 4. **Scan available skills and detect project characteristics** — build the review roster for this session. Check `~/.claude/skills/` and detect project traits from the codebase.
 
@@ -142,8 +142,8 @@ Every sub-agent must have restricted tools. Never grant more than needed.
 
 Run **all active review slots in parallel** — never skip, never merge into one agent.
 
-If Agent Teams is available: spawn a review team.
-If not: launch all review agents simultaneously.
+If Agent Teams is available (confirmed in Phase 0 Step 2): **MUST spawn a review team** — do not use individual agents for review slots.
+If not available: launch all review agents simultaneously in a single Agent call batch.
 
 **固定 review（每次必须全部通过）：**
 
