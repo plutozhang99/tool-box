@@ -33,14 +33,20 @@ Execute in this order:
 0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected CTO model (`sonnet`).
 
    - **Sonnet** → Proceed normally (expected).
-   - **Opus** → Warn and proceed:
-     > ⚠️ 当前 CTO 运行在 **Opus** 上。CTO 编排任务用 Sonnet 即可胜任，Opus 成本更高但不会提升编排质量。
-     > 如需切换，退出后用 Sonnet 重新运行 `/start-project`。继续当前模型则无需操作。
-   - **Haiku** → Warn and **block**:
-     > 🚫 当前 CTO 运行在 **Haiku** 上。Haiku 不适合 CTO 编排角色（需要复杂规划、多轮 review 判断和上下文管理）。
-     > 请切换到 **Sonnet**（推荐）或 **Opus** 后重新运行 `/start-project`。
+   - **Opus** or **Haiku** → Show the warning below and **wait for user response**. Do NOT proceed until the user explicitly chooses.
 
-     Stop execution — do NOT proceed with Phase 0.
+     > ⚠️ **模型检查**
+     >
+     > 当前 CTO 运行在 **[当前模型]** 上，预设为 **Sonnet**。
+     > - Opus：能力足够但成本更高，编排任务用 Sonnet 即可胜任
+     > - Haiku：不适合 CTO 角色（需要复杂规划、多轮 review 判断和上下文管理）
+     >
+     > 请选择：
+     > 1. **继续** — 使用当前模型执行（Opus 可以，Haiku 不推荐）
+     > 2. **切换** — 退出后切换到 Sonnet 重新运行 `/start-project`
+
+     If user chooses to continue **and** current model is Haiku, warn once more that quality will be significantly degraded, then respect the user's decision.
+     If user chooses to switch, stop execution.
 
    Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the CTO conversation itself.
 
