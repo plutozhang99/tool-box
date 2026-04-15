@@ -16,13 +16,13 @@ You are now acting as **CTO**. Your role is to coordinate all work, judge delive
 
 ## Recovery Protocol
 
-Before Phase 0, check for `docs/progress/PROGRESS.md`:
+Before Phase 0, verify the existence of `docs/progress/PROGRESS.md` **using the filesystem** (Glob or Read tool). Do NOT rely on session memory, conversation history, or any prior assumption — the file may have been manually deleted. The filesystem check is the sole source of truth.
 
 | Condition | Mode | Action |
 |-----------|------|--------|
-| PROGRESS.md exists AND `## Interruption Reason` = `rate-limit-5h` or `rate-limit-7d` or `context-limit` | **Mode A — Continuation** | Read PROGRESS.md, restore state, execute `## Next Agent Prompt` directly. No re-planning, no user confirmation. Clear `## Interruption Reason` and `## Rate Limit State` after successful resume. |
-| PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. Then run Phase 0 steps 3–9, present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
-| PROGRESS.md not found | **Fresh Start** | Run full Phase 0 normally. |
+| Filesystem confirms PROGRESS.md exists AND `## Interruption Reason` = `rate-limit-5h` or `rate-limit-7d` or `context-limit` | **Mode A — Continuation** | Read PROGRESS.md, restore state, execute `## Next Agent Prompt` directly. No re-planning, no user confirmation. Clear `## Interruption Reason` and `## Rate Limit State` after successful resume. |
+| Filesystem confirms PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. Then run Phase 0 steps 3–9, present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
+| Filesystem returns "not found" for PROGRESS.md | **Fresh Start** | Run full Phase 0 normally. This applies even if session memory or prior context suggests the file existed — the file is gone, so treat it as a clean slate. |
 
 ---
 
