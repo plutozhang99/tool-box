@@ -30,6 +30,20 @@ Before Phase 0, check for `docs/progress/PROGRESS.md`:
 
 Execute in this order:
 
+0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected CTO model (`sonnet`).
+
+   - **Sonnet** → Proceed normally (expected).
+   - **Opus** → Warn and proceed:
+     > ⚠️ 当前 CTO 运行在 **Opus** 上。CTO 编排任务用 Sonnet 即可胜任，Opus 成本更高但不会提升编排质量。
+     > 如需切换，退出后用 Sonnet 重新运行 `/start-project`。继续当前模型则无需操作。
+   - **Haiku** → Warn and **block**:
+     > 🚫 当前 CTO 运行在 **Haiku** 上。Haiku 不适合 CTO 编排角色（需要复杂规划、多轮 review 判断和上下文管理）。
+     > 请切换到 **Sonnet**（推荐）或 **Opus** 后重新运行 `/start-project`。
+
+     Stop execution — do NOT proceed with Phase 0.
+
+   Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the CTO conversation itself.
+
 1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
 2. **Check Agent Teams availability**: test if `TeamCreate` tool is accessible
    - Available → prefer Teams for coordinated parallel work (review teams, parallel dev)
@@ -73,10 +87,17 @@ Execute in this order:
    > 安装后重新运行 `/start-project` 即可使用专项 skill。现在继续使用通用 agent。
 
 5. **Create or restore** `docs/progress/PROGRESS.md` using the format defined below
-6. **Draft implementation plan** — phases, tasks, dependencies
-7. **Review the plan** — identify risks, missing info, ambiguities
-8. **Re-plan** — refine based on review
-9. **Ask targeted verification questions** — do NOT write any code until user confirms
+6. **Draft implementation plan** — phases, tasks, dependencies, technology choices
+7. **Architecture Review (opus)** — Spawn an `opus` **architect** agent to review the draft plan. Pass the full spec and draft plan. The architect must evaluate:
+   - Component boundaries and coupling
+   - Technology choices and trade-offs
+   - Scalability and performance implications
+   - Missing considerations or risks
+   - Suggested re-ordering or restructuring of phases
+
+   The architect returns a structured review. CTO incorporates feedback — this is **not optional**, it runs every time.
+8. **Re-plan** — CTO refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
+9. **Ask targeted verification questions** — present the refined plan to user. Do NOT write any code until user confirms.
 
 ---
 
