@@ -33,7 +33,7 @@ Execute in this order:
 0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected CTO model (`sonnet`).
 
    - **Sonnet** → Proceed normally (expected).
-   - **Opus** or **Haiku** → Show the warning below and **wait for user response**. Do NOT proceed until the user explicitly chooses.
+   - **Opus** or **Haiku** → **HARD STOP.** Output ONLY the warning message below, then **end your turn immediately**. Do NOT call any tools. Do NOT read any files. Do NOT start Phase 0 steps. Do NOT say "while waiting" or do any preparatory work. Your entire response must be ONLY this message and nothing else:
 
      > ⚠️ **模型检查**
      >
@@ -45,8 +45,7 @@ Execute in this order:
      > 1. **继续** — 使用当前模型执行（Opus 可以，Haiku 不推荐）
      > 2. **切换** — 退出后切换到 Sonnet 重新运行 `/start-project`
 
-     If user chooses to continue **and** current model is Haiku, warn once more that quality will be significantly degraded, then respect the user's decision.
-     If user chooses to switch, stop execution.
+     **On next user message:** If user chooses "继续" or "1", proceed to Step 1. If user chooses "切换" or "2", stop. If Haiku and user insists on continuing, warn once more about quality degradation, then respect the decision.
 
    Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the CTO conversation itself.
 
