@@ -1,6 +1,7 @@
 ---
 name: start-project
-description: Orchestrator skill. Activates the full agentic development workflow for a new project or feature. Reads spec at {path}, plans, verifies with user, then orchestrates sub-agents with mandatory 3-way review, git milestones, and progress tracking.
+description: "Use when the user wants to start a new project, implement a major feature from a spec file, or run an agentic development workflow with planning, architecture review, multi-agent implementation, mandatory code/security/functional review, and progress tracking."
+argument-hint: <path-to-spec-file>
 triggers:
   - "start project"
   - "new project"
@@ -10,7 +11,7 @@ triggers:
 
 # Start Project — Orchestrator Protocol
 
-You are now acting as **Orchestrator**. Your role is to coordinate all work, judge delivery quality, and drive the plan forward. Minimize direct code writing — delegate to sub-agents. Validate at key checkpoints.
+You are now acting as **Orchestrator**. Your job is to coordinate, delegate, and judge — not to analyze or implement directly. Spawn sub-agents for all substantive work: code analysis, gap assessment, implementation, review. Your direct actions are limited to: reading PROGRESS.md and spec files, spawning agents, writing PROGRESS.md (batched), and presenting decisions to the user. If you catch yourself reading source code to form an opinion, stop and delegate that to an Explore agent instead.
 
 ---
 
@@ -21,8 +22,35 @@ Before Phase 0, verify the existence of `docs/progress/PROGRESS.md` **using the 
 | Condition | Mode | Action |
 |-----------|------|--------|
 | Filesystem confirms PROGRESS.md exists AND `## Interruption Reason` = `rate-limit-5h` or `rate-limit-7d` or `context-limit` | **Mode A — Continuation** | Read PROGRESS.md, restore state, execute `## Next Agent Prompt` directly. No re-planning, no user confirmation. Clear `## Interruption Reason` and `## Rate Limit State` after successful resume. |
-| Filesystem confirms PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. Then run Phase 0 steps 3–9, present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
+| Filesystem confirms PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. **Phase-transition shortcut:** if the project language/stack is unchanged (Review Roster already set), skip steps 3–6 and jump directly to step 7 (Draft plan). **Full re-plan:** if the project fundamentally changed or no Review Roster exists, run steps 3–10 fully. Present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
 | Filesystem returns "not found" for PROGRESS.md | **Fresh Start** | Run full Phase 0 normally. This applies even if session memory or prior context suggests the file existed — the file is gone, so treat it as a clean slate. |
+
+---
+
+## Orchestrator Output Discipline
+
+**Allowed output (keep each occurrence to 1–3 lines):**
+- Verification questions (Phase 0 step 10)
+- Error escalations and Round 3 decisions
+- Context/rate-limit pause notifications
+- One-line status when spawning an agent: `> Spawning sonnet coder for Task 2.A…`
+
+**Banned output — if you catch yourself writing any of these, delete it:**
+- Reasoning narration ("Let me check…", "I can see that…", "Good —", "Now I need to…")
+- Inline analysis of code, gaps, or decisions — write those to PROGRESS.md, not the conversation
+- The full plan as prose — present it as a compact table + numbered questions only
+- Narration of tool calls you are about to make ("Let me read X and Y in parallel")
+- Summaries of what sub-agents returned — the user can expand agent results themselves
+
+**Zero-output turns are ideal.** If a turn consists only of tool calls (read PROGRESS.md → spawn agent → write PROGRESS.md), output nothing between them.
+
+**PROGRESS.md update discipline:**
+- Before writing, compose the full set of changes mentally. Then apply them in a **single Write** (preferred) **or at most two Edit calls**. Three or more sequential edits to PROGRESS.md are a hard error — they cause duplicate sections and ordering bugs.
+- Read the current file content before writing to avoid clobbering recent changes.
+
+**Delegation discipline:**
+- Do NOT read source code files (*.py, *.ts, *.go, etc.) directly. Spawn a **haiku Explore agent** to analyze code and report findings. The orchestrator's context is expensive; sub-agent context is disposable.
+- Exception: reading PROGRESS.md, spec files, and config files (pyproject.toml, package.json, etc.) is fine — these are coordination artifacts, not source code.
 
 ---
 
@@ -51,8 +79,8 @@ Execute in this order:
 
 1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
 2. **Check Agent Teams availability**: Check whether `TeamCreate` appears in either your loaded tools list or the deferred tools list (shown in `<system-reminder>`).
-   - **Found (loaded or deferred)** → Teams is available. If deferred, call `ToolSearch(query: "select:TeamCreate,TeamDelete")` immediately to load the schema before proceeding. Then **MUST use Teams** for all coordinated parallel work (review teams, parallel dev). Do NOT fall back to individual agents for parallel tasks.
-   - **Not found anywhere** → Teams unavailable. Use individual sub-agents with explicit context passing.
+   - **Found (loaded or deferred)** → Teams is available. If deferred, call `ToolSearch(query: "select:TeamCreate,TeamDelete")` to load the schema. Record "Teams: available" in PROGRESS.md. See **Teams vs Individual Agents** below for when to use which.
+   - **Not found anywhere** → Teams unavailable. Use individual sub-agents for all parallel work.
 3. **Detect project language(s)** — scan file extensions, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, etc.
 4. **Scan available skills and detect project characteristics** — build the review roster for this session. Check `~/.claude/skills/` and detect project traits from the codebase.
 
@@ -91,9 +119,9 @@ Execute in this order:
    >
    > 安装后重新运行 `/start-project` 即可使用专项 skill。现在继续使用通用 agent。
 
-5. **Create or restore** `docs/progress/PROGRESS.md` using the format defined below
-6. **Draft implementation plan** — phases, tasks, dependencies, technology choices
-7. **Architecture Review (opus)** — Spawn an `opus` **architect** agent to review the draft plan. Pass the full spec and draft plan. The architect must evaluate:
+6. **Create or restore** `docs/progress/PROGRESS.md` using the format defined below
+7. **Draft implementation plan** — phases, tasks, dependencies, technology choices
+8. **Architecture Review (opus)** — Spawn an `opus` **architect** agent to review the draft plan. Pass the full spec and draft plan. The architect must evaluate:
    - Component boundaries and coupling
    - Technology choices and trade-offs
    - Scalability and performance implications
@@ -101,8 +129,8 @@ Execute in this order:
    - Suggested re-ordering or restructuring of phases
 
    The architect returns a structured review. Orchestrator incorporates feedback — this is **not optional**, it runs every time.
-8. **Re-plan** — Orchestrator refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
-9. **Ask targeted verification questions** — present the refined plan to user. Do NOT write any code until user confirms.
+9. **Re-plan** — Orchestrator refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
+10. **Ask targeted verification questions** — present the refined plan as a compact table (phase / tasks / key tech choices) followed by 3–5 numbered questions. Do NOT prose-narrate the full plan. Do NOT write any code until user confirms.
 
 ---
 
@@ -126,15 +154,37 @@ Execute in this order:
 
 ## Agent Tool Isolation
 
-Every sub-agent must have restricted tools. Never grant more than needed.
+Use the right `subagent_type` to enforce tool restrictions. Never use `general-purpose` when a restricted type exists.
 
-| Agent Type | Allowed Tools | Max Turns |
-|-----------|--------------|-----------|
-| Coding agent | Read, Edit, Write, Bash, Glob, Grep | 30 |
-| Review agent | Read, Glob, Grep (read-only) | 10 |
-| Planning / search agent | Read, Glob, Grep, WebSearch | 10 |
-| Doc agent | Read, Write, Edit, Glob, Grep | 15 |
-| Git agent | Bash (git only), Read | 5 |
+| Task | `subagent_type` | Access Level |
+|------|----------------|-------------|
+| Coding / implementation | `general-purpose` | Full (Read, Edit, Write, Bash, Glob, Grep) |
+| Code review | `code-reviewer` or language-specific (`python-reviewer`, etc.) | Read-only (Read, Glob, Grep) |
+| Codebase exploration / gap analysis | `Explore` | Read-only (no Edit, Write) |
+| Architecture / planning | `architect` or `Plan` | Read-only |
+| Documentation | `general-purpose` (model: `haiku`) | Full |
+| Git operations | `general-purpose` (model: `haiku`) | Full (prompt restricts to git commands) |
+
+---
+
+## Teams vs Individual Agents
+
+Not all parallel work benefits from Teams. Teams add coordination overhead (TeamCreate → TaskCreate → spawn → assign → message → TeamDelete). Use the right tool:
+
+| Scenario | Use | Why |
+|----------|-----|-----|
+| Reviews (code, security, functional) | **Individual parallel Agent calls** | Read-only, short-lived, no inter-agent communication needed |
+| 2+ independent coding tasks on different files | **Teams** (if available) | Long-running, benefit from shared task list and progress tracking |
+| Single coding task | **Individual Agent** | No coordination needed |
+| Architecture / planning | **Individual Agent** | One-shot analysis, no coordination |
+
+**Teams workflow** (when using Teams for parallel dev):
+1. `TeamCreate(team_name: "phase-2-dev")` — creates team + task list
+2. `TaskCreate(...)` for each coding task
+3. `Agent(team_name: "phase-2-dev", name: "task-a-coder", subagent_type: "general-purpose", model: "sonnet", ...)` per teammate
+4. `TaskUpdate(owner: "task-a-coder")` to assign tasks
+5. Wait for automatic message delivery when teammates complete
+6. After all done: `SendMessage(to: each_teammate, message: {type: "shutdown_request"})` then `TeamDelete()`
 
 ---
 
@@ -142,8 +192,7 @@ Every sub-agent must have restricted tools. Never grant more than needed.
 
 Run **all active review slots in parallel** — never skip, never merge into one agent.
 
-If Agent Teams is available (confirmed in Phase 0 Step 2): **MUST spawn a review team** — do not use individual agents for review slots.
-If not available: launch all review agents simultaneously in a single Agent call batch.
+**Always use individual parallel Agent calls for reviews** — launch all review agents simultaneously in a single Agent call batch. Do NOT use Teams for reviews (they are read-only, short-lived, and don't need inter-agent coordination).
 
 **固定 review（每次必须全部通过）：**
 
@@ -239,15 +288,16 @@ Relevant files: [list of files being modified]
 - [date] Decision: ... Rationale: ...
 - [date] Risk accepted: ... Reason: ...
 
-## Session Rules
-- Model assignment, review protocol, and escalation rules as defined in this skill
-- Current Orchestrator instructions: [any session-specific overrides]
-
 ## Next Agent Prompt
-<!-- Required content: project name + path, task to resume, relevant files,
-     Review Roster summary, key decisions summary. Must be fully self-contained. -->
+<!-- MAX 30 LINES. Include only: project name+path, language+stack,
+     the specific task to execute, files to modify, and key constraints.
+     Do NOT include full architecture descriptions or session history. -->
 [Exact prompt — no external context assumed]
 ```
+
+**Template rules:**
+- Use ONLY the sections defined above. Do not invent custom sections (e.g., "Technology Stack", "Directory Layout", "Session Rules").
+- Any project-specific context (tech stack, directory structure, session overrides) belongs in `## Key Decisions & Accepted Risks` or `## Next Agent Prompt`, not in new sections.
 
 ---
 
@@ -284,6 +334,7 @@ Before every commit, git-agent **must** run `git diff --staged` and scan for the
 
 - Monitor context usage continuously
 - `## Next Agent Prompt` must always be current and self-contained for recovery
+- **Compaction resilience:** After `/compact`, this skill's description may not be re-injected. PROGRESS.md is the compaction survival mechanism — all state needed to resume lives there, not in conversation history. The Recovery Protocol handles post-compaction restart automatically.
 - Operate autonomously without user approval between steps — except:
   - **Phase 0** verification (before any code is written)
   - **90% context** checkpoint
