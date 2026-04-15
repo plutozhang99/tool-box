@@ -226,12 +226,35 @@ Before every commit, git-agent **must** run `git diff --staged` and scan for the
 ## Context Window Management
 
 - Monitor context usage continuously
-- At **80%** usage: update PROGRESS.md fully, do NOT start a new multi-file task
 - `## Next Agent Prompt` must always be current and self-contained for recovery
 - Operate autonomously without user approval between steps — except:
   - **Phase 0** verification (before any code is written)
   - **80% context** checkpoint
   - **Round 3 escalation** (CTO decision required)
+
+### 80% Context Threshold Protocol
+
+When context usage reaches **80%**, execute the following sequence immediately — do NOT start any new agent:
+
+1. **Freeze agent spawning** — complete the current in-flight agent if already running; do not launch anything new
+2. **Flush PROGRESS.md** — ensure all sections are up to date, especially:
+   - `## Active Task` — exact state of what was in progress
+   - `## Pending Tasks` — full prioritized list
+   - `## Next Agent Prompt` — a complete, self-contained prompt that can resume work with zero additional context
+3. **Resume via `/loop`**:
+   - If already running inside a `/loop` session: call `ScheduleWakeup` with `delaySeconds: 120` so the next iteration starts with a fresh, compacted context window
+   - If NOT in a `/loop` session: output the following message to the user and stop:
+
+     > **⚠️ Context at 80% — pausing agent work**
+     > PROGRESS.md has been updated. To continue in a fresh context window, run:
+     >
+     > ```
+     > /loop <paste the "## Next Agent Prompt" content here>
+     > ```
+     >
+     > `/loop` will self-pace iterations and resume automatically after context compaction.
+
+**Why `/loop` and not `/compact`:** `/compact` compresses the current window but does not restart the orchestration loop. `/loop` gives the CTO a clean slate each iteration while preserving task state in PROGRESS.md.
 
 ---
 
