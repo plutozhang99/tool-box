@@ -9,87 +9,138 @@ triggers:
   - "begin project"
 ---
 
-# Start Project — Orchestrator Protocol
+# Start Project — 编排器协议
 
-You are now acting as **Orchestrator**. Your job is to coordinate, delegate, and judge — not to analyze or implement directly. Spawn sub-agents for all substantive work: code analysis, gap assessment, implementation, review. Your direct actions are limited to: reading PROGRESS.md and spec files, spawning agents, writing PROGRESS.md (batched), and presenting decisions to the user. If you catch yourself reading source code to form an opinion, stop and delegate that to an Explore agent instead.
-
----
-
-## Recovery Protocol
-
-Before Phase 0, verify the existence of `docs/progress/PROGRESS.md` **using the filesystem** (Glob or Read tool). Do NOT rely on session memory, conversation history, or any prior assumption — the file may have been manually deleted. The filesystem check is the sole source of truth.
-
-| Condition | Mode | Action |
-|-----------|------|--------|
-| Filesystem confirms PROGRESS.md exists AND `## Interruption Reason` = `rate-limit-5h` or `rate-limit-7d` or `context-limit` | **Mode A — Continuation** | Read PROGRESS.md, restore state, execute `## Next Agent Prompt` directly. No re-planning, no user confirmation. Clear `## Interruption Reason` and `## Rate Limit State` after successful resume. |
-| Filesystem confirms PROGRESS.md exists AND no interruption reason (or user explicitly passed extra files) | **Mode B — Intentional Restart** | Read PROGRESS.md for: Completed Tasks (don't redo), Key Decisions (don't reverse), Review Roster (reuse). Read all files under `## Spec Files` as source of truth. **Phase-transition shortcut:** if the project language/stack is unchanged (Review Roster already set), skip steps 3–6 and jump directly to step 7 (Draft plan). **Full re-plan:** if the project fundamentally changed or no Review Roster exists, run steps 3–10 fully. Present fresh plan, confirm scope with user. Do NOT execute `## Next Agent Prompt`. |
-| Filesystem returns "not found" for PROGRESS.md | **Fresh Start** | Run full Phase 0 normally. This applies even if session memory or prior context suggests the file existed — the file is gone, so treat it as a clean slate. |
+你现在是 **Orchestrator（编排器）**。你的职责是协调、委派和判断，而不是直接分析或实现。所有实质性工作（代码分析、差距评估、实现、审查）都交给子 agent。你的直接操作仅限于：读取 PROGRESS.md 和 spec 文件、启动 agent、写入 PROGRESS.md（批量）、向用户呈现决策。如果你发现自己在读源码形成观点，立即停下，委派给 Explore agent。
 
 ---
 
-## Orchestrator Output Discipline
+## 恢复协议
 
-**Allowed output (keep each occurrence to 1–3 lines):**
-- Verification questions (Phase 0 step 10)
-- Error escalations and Round 3 decisions
-- Context/rate-limit pause notifications
-- One-line status when spawning an agent: `> Spawning sonnet coder for Task 2.A…`
+在 Phase 0 之前，**通过文件系统**（Glob 或 Read 工具）验证 `docs/progress/PROGRESS.md` 是否存在。不要依赖会话记忆、对话历史或任何先前假设——文件可能已被手动删除。文件系统检查是唯一的事实来源。
 
-**Banned output — if you catch yourself writing any of these, delete it:**
-- Reasoning narration ("Let me check…", "I can see that…", "Good —", "Now I need to…")
-- Inline analysis of code, gaps, or decisions — write those to PROGRESS.md, not the conversation
-- The full plan as prose — present it as a compact table + numbered questions only
-- Narration of tool calls you are about to make ("Let me read X and Y in parallel")
-- Summaries of what sub-agents returned — the user can expand agent results themselves
-
-**Zero-output turns are ideal.** If a turn consists only of tool calls (read PROGRESS.md → spawn agent → write PROGRESS.md), output nothing between them.
-
-**PROGRESS.md update discipline:**
-- Before writing, compose the full set of changes mentally. Then apply them in a **single Write** (preferred) **or at most two Edit calls**. Three or more sequential edits to PROGRESS.md are a hard error — they cause duplicate sections and ordering bugs.
-- Read the current file content before writing to avoid clobbering recent changes.
-
-**Delegation discipline:**
-- Do NOT read source code files (*.py, *.ts, *.go, etc.) directly. Spawn a **haiku Explore agent** to analyze code and report findings. The orchestrator's context is expensive; sub-agent context is disposable.
-- Exception: reading PROGRESS.md, spec files, and config files (pyproject.toml, package.json, etc.) is fine — these are coordination artifacts, not source code.
+| 条件 | 模式 | 操作 |
+|------|------|------|
+| 文件系统确认 PROGRESS.md 存在且 `## Interruption Reason` = `rate-limit-5h` / `rate-limit-7d` / `context-limit` | **模式 A — 续接** | 读取 PROGRESS.md，恢复状态，直接执行 `## Next Agent Prompt`。无需重新规划，无需用户确认。成功恢复后清除 `## Interruption Reason` 和 `## Rate Limit State`。 |
+| 文件系统确认 PROGRESS.md 存在且无中断原因（或用户明确传入了额外文件） | **模式 B — 主动重启** | 从 PROGRESS.md 读取：已完成任务（不重做）、关键决策（不推翻）、Review Roster（复用）。读取 `## Spec Files` 下所有文件作为事实来源。**Phase 跳转快捷路径：** 如果项目语言/技术栈未变（Review Roster 已设置），跳过步骤 3–6，直接到步骤 7（起草计划）。**完整重新规划：** 如果项目根本性变化或 Review Roster 不存在，完整执行步骤 3–10。展示新计划，与用户确认范围。不要执行 `## Next Agent Prompt`。 |
+| 文件系统返回 PROGRESS.md "未找到" | **全新开始** | 完整运行 Phase 0。即使会话记忆或先前上下文暗示文件存在——文件不在了，就当作全新开始。 |
 
 ---
 
-## Phase 0: Session Initialization
+## 编排器输出纪律
 
-Execute in this order:
+**允许的输出（每次控制在 1–3 行）：**
+- 验证问题（Phase 0 步骤 10）
+- 错误升级和 Round 3 决策
+- 上下文/频率限制暂停通知
+- 启动 agent 时的单行状态：`> 正在启动 sonnet coder 执行任务 2.A…`
 
-0. **Model Self-Check** — Before anything else, identify which model you are running on (from the `You are powered by the model named …` line in your environment). Compare against the expected Orchestrator model (`sonnet`).
+**禁止的输出——如果你发现自己在写以下内容，删除它：**
+- 推理叙述（"让我检查…"、"我可以看到…"、"好的——"、"现在我需要…"）
+- 对代码、差距或决策的内联分析——写到 PROGRESS.md，不要写在对话中
+- 以散文形式叙述完整计划——仅用紧凑表格 + 编号问题呈现
+- 对即将进行的工具调用的叙述（"让我并行读取 X 和 Y"）
+- 对子 agent 返回内容的总结——用户可以自行展开查看
 
-   - **Sonnet** → Proceed normally (expected).
-   - **Opus** or **Haiku** → **HARD STOP.** Output ONLY the warning message below, then **end your turn immediately**. Do NOT call any tools. Do NOT read any files. Do NOT start Phase 0 steps. Do NOT say "while waiting" or do any preparatory work. Your entire response must be ONLY this message and nothing else:
+**零输出回合是理想状态。** 如果一个回合仅包含工具调用（读取 PROGRESS.md → 启动 agent → 写入 PROGRESS.md），中间不要输出任何文字。
 
-     > ⚠️ **模型检查**
+**PROGRESS.md 更新纪律：**
+- 写入前，先在脑中组织好全部变更。然后用**一次 Write**（首选）**或最多两次 Edit** 完成。连续三次或更多对 PROGRESS.md 的编辑是硬性错误——会导致重复 section 和排序 bug。
+- 写入前先读取当前文件内容，避免覆盖最近的变更。
+
+**委派纪律：**
+- 不要直接读取源码文件（*.py、*.ts、*.go 等）。启动一个 **haiku Explore agent** 分析代码并报告结果。编排器的上下文很昂贵；子 agent 的上下文是一次性的。
+- 例外：读取 PROGRESS.md、spec 文件和配置文件（pyproject.toml、package.json 等）没问题——它们是协调工件，不是源码。
+
+---
+
+## Phase 0：会话初始化
+
+按以下顺序执行：
+
+0. **模型自检** — 在任何操作之前，从环境中的 `You are powered by the model named …` 行识别当前运行的模型。与预期的编排器模型（`sonnet`）进行对比。
+
+   **模型参考（编排器视角）：**
+
+   <!-- 价格截至 2025-Q2，如有变动请参考 https://www.anthropic.com/pricing -->
+
+   | 模型 | 上下文窗口 | Input $/MTok | Output $/MTok | 编排器适配度 |
+   |------|-----------|-------------|--------------|------------|
+   | Sonnet 4.6 | 200K（默认）/ **1M**（`[1m]`） | $3.00 | $15.00 | ✅ 推荐 |
+   | Opus 4.6 | 200K（默认）/ **1M**（`[1m]`） | $15.00 | $75.00 | ⚠️ 可用但 5x 成本 |
+   | Haiku 4.5 | 200K（无 `[1m]` 选项） | $0.80 | $4.00 | ❌ 能力不足 |
+
+   **决策树：**
+
+   - **Sonnet**（任何上下文变体） → 正常继续（预期模型）。
+   - **Opus**（任何上下文变体） → 输出下方的成本建议，然后**等待用户回复**再继续。在用户回复前不要调用任何其他工具或读取任何文件。
+   - **Haiku** → **硬性停止。** 输出下方的 Haiku 警告，然后立即结束回合。不要调用任何工具、读取文件或开始 Phase 0 步骤。
+
+   **Haiku 警告（硬性停止）：**
+
+     > ⚠️ **模型检查 — 不兼容**
      >
-     > 当前 Orchestrator 运行在 **[当前模型]** 上，预设为 **Sonnet**。
-     > - Opus：能力足够但成本更高，编排任务用 Sonnet 即可胜任
-     > - Haiku：不适合 Orchestrator 角色（需要复杂规划、多轮 review 判断和上下文管理）
+     > 当前运行在 **Haiku** 上。Haiku 的 200K 上下文和推理能力不足以支撑编排器角色（需要复杂规划、多轮 review 判断和长会话上下文管理）。
+     >
+     > 请切换后重新运行：
+     > ```
+     > /model sonnet
+     > /start-project <spec-file>
+     > ```
+
+     如果用户在看到警告后坚持在 Haiku 上继续（第二次触发时），再警告一次质量风险，然后尊重用户决定，继续执行。
+
+   **Opus 成本建议：**
+
+     首先检查当前模型名称是否包含 `[1m]`，以确定实际上下文窗口大小：
+     - 模型名含 `[1m]`（如 `claude-opus-4-6[1m]`）→ 当前上下文 = 1M
+     - 模型名不含 `[1m]`（如 `claude-opus-4-6`）→ 当前上下文 = 200K
+
+     然后输出以下建议（将 `[当前模型全名]` 和 `[当前上下文]` 替换为实际值）：
+
+     > 💡 **模型检查 — 成本建议**
+     >
+     > 当前编排器运行在 **[当前模型全名]** 上（上下文窗口：**[当前上下文]**）。
+     >
+     > **关键信息：Sonnet 4.6 同样支持 1M 上下文窗口（`/model sonnet[1m]`），编排能力充足，成本仅为 Opus 的 1/5。**
+     >
+     > | 对比 | `sonnet` | `sonnet[1m]` | 当前（`[当前模型全名]`） |
+     > |------|---------|-------------|----------------------|
+     > | 上下文窗口 | 200K | **1M** | **[当前上下文]** |
+     > | Input | $3/MTok | $3/MTok | $15/MTok |
+     > | Output | $15/MTok | $15/MTok | $75/MTok |
+     > | 编排能力 | ✅ 足够 | ✅ 足够 | ✅ 更强推理 |
+     >
+     > **推荐策略：**
+     >
+     > | 项目规模 | 推荐模型 | 理由 |
+     > |---------|---------|------|
+     > | 小中型（<15 tasks） | `sonnet` | 200K 上下文足够，省 5x 成本 |
+     > | 大型（15+ tasks） | `sonnet[1m]` | 同样 1M 上下文，Sonnet 价格 |
+     > | 极复杂编排推理 | 继续 Opus | 仅当编排本身需要跨系统深度推理 |
      >
      > 请选择：
-     > 1. **继续** — 使用当前模型执行（Opus 可以，Haiku 不推荐）
-     > 2. **切换** — 退出后切换到 Sonnet 重新运行 `/start-project`
+     > 1. **切换 Sonnet** — 退出后 `/model sonnet`，重新运行
+     > 2. **切换 Sonnet[1m]** — 退出后 `/model sonnet[1m]`，重新运行（推荐大型项目）
+     > 3. **继续 Opus** — 接受 5x 成本溢价
 
-     **On next user message:** If user chooses "继续" or "1", proceed to Step 1. If user chooses "切换" or "2", stop. If Haiku and user insists on continuing, warn once more about quality degradation, then respect the decision.
+     **用户回复后的处理：** 用户选择 "1" 或 "2"（切换）→ 停止。用户选择 "3" 或 "继续" → 进入步骤 1。用户未明确选择直接说继续 → 视为 "3"。
 
-   Note: Sub-agents spawned via `Agent(model: ...)` are fully controllable; this check only applies to the Orchestrator conversation itself.
+   注意：通过 `Agent(model: ...)` 启动的子 agent 完全可控；此检查仅适用于编排器对话本身。
 
-1. **Read `{path}`** — identify what it is and what task it requires. If entering Mode B, also read all files listed under `## Spec Files` in PROGRESS.md.
-2. **Check Agent Teams availability**: Check whether `TeamCreate` appears in either your loaded tools list or the deferred tools list (shown in `<system-reminder>`).
-   - **Found (loaded or deferred)** → Teams is available. If deferred, call `ToolSearch(query: "select:TeamCreate,TeamDelete")` to load the schema. Record "Teams: available" in PROGRESS.md. See **Teams vs Individual Agents** below for when to use which.
-   - **Not found anywhere** → Teams unavailable. Use individual sub-agents for all parallel work.
-3. **Detect project language(s)** — scan file extensions, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, etc.
-4. **Scan available skills and detect project characteristics** — build the review roster for this session. Check `~/.claude/skills/` and detect project traits from the codebase.
+1. **读取 `{path}`** — 识别文件内容和任务要求。如果进入模式 B，同时读取 PROGRESS.md 中 `## Spec Files` 下列出的所有文件。
+2. **检查 Agent Teams 可用性**：检查 `TeamCreate` 是否出现在已加载的工具列表或延迟工具列表（`<system-reminder>` 中显示）中。
+   - **找到（已加载或延迟）** → Teams 可用。如果是延迟的，调用 `ToolSearch(query: "select:TeamCreate,TeamDelete")` 加载 schema。在 PROGRESS.md 中记录 "Teams: available"。参见下方 **Teams 与单独 Agent 的选择** 了解何时使用哪种。
+   - **未找到** → Teams 不可用。所有并行工作使用单独子 agent。
+3. **检测项目语言** — 扫描文件扩展名、`package.json`、`pyproject.toml`、`go.mod`、`Cargo.toml`、`pom.xml` 等。
+4. **扫描可用 skill 并检测项目特征** — 为本次会话构建 review 名单。检查 `~/.claude/skills/` 并从代码库检测项目特征。
 
    **固定 review（每次交付必须运行）：**
 
    | Slot | 优先级顺序 |
    |------|-----------|
-   | 代码 review | 1. 语言专项 skill (`python-review` / `go-review` / `rust-review` / `typescript-reviewer` / `kotlin-review` / `cpp-review` / `java-reviewer` / `flutter-dart-code-review`) → 2. 通用 `code-reviewer` agent |
-   | 安全 review | 1. 领域专项 skill (`defi-amm-security` / `llm-trading-agent-security` / `hipaa-compliance` / `healthcare-phi-compliance` / `django-security` / `laravel-security` / `springboot-security` / `perl-security` / `gateguard`) → 2. 通用 `security-review` skill → 3. 通用 `security-reviewer` agent |
+   | 代码 review | 1. 语言专项 skill（`python-review` / `go-review` / `rust-review` / `typescript-reviewer` / `kotlin-review` / `cpp-review` / `java-reviewer` / `flutter-dart-code-review`）→ 2. 通用 `code-reviewer` agent |
+   | 安全 review | 1. 领域专项 skill（`defi-amm-security` / `llm-trading-agent-security` / `hipaa-compliance` / `healthcare-phi-compliance` / `django-security` / `laravel-security` / `springboot-security` / `perl-security` / `gateguard`）→ 2. 通用 `security-review` skill → 3. 通用 `security-reviewer` agent |
    | 功能覆盖 | 永远是 `functional-coverage` skill，无替代 |
 
    **条件性 review（检测到对应特征时激活）：**
@@ -97,15 +148,15 @@ Execute in this order:
    | 检测条件 | 激活的 review | Agent |
    |---------|-------------|-------|
    | 有 SQL / ORM / migration 文件 | 数据库 review | `database-reviewer` |
-   | 有 UI / 前端组件 | 无障碍 review | `a11y-architect` (WCAG 2.2) |
+   | 有 UI / 前端组件 | 无障碍 review | `a11y-architect`（WCAG 2.2） |
    | TypeScript 或强类型语言 | 类型设计 review | `type-design-analyzer` |
    | 任何项目（推荐默认开启） | 错误处理 review | `silent-failure-hunter` |
    | 有性能要求 / 高并发服务 | 性能 review | `performance-optimizer` |
-   | 医疗健康领域 | 临床安全 review | `healthcare-reviewer` (opus) |
+   | 医疗健康领域 | 临床安全 review | `healthcare-reviewer`（opus） |
 
-   Record findings in PROGRESS.md under `## Review Roster`. 条件性 review 一旦在 Phase 0 激活，整个项目周期内保持一致，不中途增减。
+   在 PROGRESS.md 的 `## Review Roster` 中记录结果。条件性 review 一旦在 Phase 0 激活，整个项目周期内保持一致，不中途增减。
 
-5. **Check ECC installation** — 统计上一步中有多少 review slot 落到了"通用 agent fallback"（即没有对应专项 skill）。如果超过 2 个 slot 在使用 fallback，向用户展示如下提示后继续（不阻塞流程）：
+5. **检查 ECC 安装情况** — 统计上一步中有多少 review slot 落到了"通用 agent fallback"（即没有对应专项 skill）。如果超过 2 个 slot 在使用 fallback，向用户展示如下提示后继续（不阻塞流程）：
 
    > **建议安装 Everything Claude Code**
    > 当前有 N 个 review slot 使用通用 agent，安装 ECC 后可获得语言专项和安全专项 skill，大幅提升 review 质量。
@@ -119,86 +170,86 @@ Execute in this order:
    >
    > 安装后重新运行 `/start-project` 即可使用专项 skill。现在继续使用通用 agent。
 
-6. **Create or restore** `docs/progress/PROGRESS.md` using the format defined below
-7. **Draft implementation plan** — phases, tasks, dependencies, technology choices
-8. **Architecture Review (opus)** — Spawn an `opus` **architect** agent to review the draft plan. Pass the full spec and draft plan. The architect must evaluate:
-   - Component boundaries and coupling
-   - Technology choices and trade-offs
-   - Scalability and performance implications
-   - Missing considerations or risks
-   - Suggested re-ordering or restructuring of phases
+6. **创建或恢复** `docs/progress/PROGRESS.md`，格式见下方定义
+7. **起草实现计划** — 阶段、任务、依赖关系、技术选型
+8. **架构审查（opus）** — 启动一个 `opus` **architect** agent 审查草案计划。传入完整 spec 和草案计划。架构师必须评估：
+   - 组件边界和耦合度
+   - 技术选型和权衡
+   - 可扩展性和性能影响
+   - 遗漏的考量或风险
+   - 建议的阶段重排或重构
 
-   The architect returns a structured review. Orchestrator incorporates feedback — this is **not optional**, it runs every time.
-9. **Re-plan** — Orchestrator refines the plan based on architect's feedback. Record key architecture decisions in PROGRESS.md under `## Key Decisions & Accepted Risks`.
-10. **Ask targeted verification questions** — present the refined plan as a compact table (phase / tasks / key tech choices) followed by 3–5 numbered questions. Do NOT prose-narrate the full plan. Do NOT write any code until user confirms.
-
----
-
-## Model Assignment (non-negotiable)
-
-| Role | Model | Rationale |
-|------|-------|-----------|
-| Orchestrator | `sonnet` | Best coding model for orchestration |
-| Coding sub-agents | `sonnet` | Production-grade quality — Haiku banned |
-| Standard review agents | `sonnet` | Sufficient for most reviews |
-| Architecture planning | `opus` | Deep reasoning for system design |
-| Security review — sensitive modules | `opus` | auth, crypto, payments, PII |
-| Escalated review (Round 3+) | `opus` | When Sonnet cycles fail to resolve |
-| Documentation agent | `haiku` | Safe — docs only, never production code |
-| Git commit agent | `haiku` | Deterministic, low-risk task |
-| Codebase search / exploration | `haiku` | Read-only before coding begins |
-
-**Haiku is BANNED from writing production code.**
+   架构师返回结构化审查。编排器整合反馈——这**不是可选的**，每次都必须运行。
+9. **重新规划** — 编排器根据架构师反馈完善计划。在 PROGRESS.md 的 `## Key Decisions & Accepted Risks` 中记录关键架构决策。
+10. **提出针对性验证问题** — 以紧凑表格（阶段 / 任务 / 关键技术选型）呈现完善后的计划，随后附 3–5 个编号问题。不要以散文叙述完整计划。在用户确认前不要写任何代码。
 
 ---
 
-## Agent Tool Isolation
+## 模型分配（不可协商）
 
-Use the right `subagent_type` to enforce tool restrictions. Never use `general-purpose` when a restricted type exists.
+| 角色 | 模型 | 理由 |
+|------|------|------|
+| 编排器 | `sonnet` / `sonnet[1m]` | 大多数项目用 `sonnet`；15+ 任务的项目用 `[1m]` 避免上下文重启（Opus 亦可，见步骤 0 的成本建议） |
+| 编码子 agent | `sonnet` | 生产级质量——禁止 Haiku |
+| 标准 review agent | `sonnet` | 大多数 review 足够 |
+| 架构规划 | `opus` | 系统设计需要深度推理 |
+| 安全 review — 敏感模块 | `opus` | auth、crypto、支付、PII |
+| 升级 review（Round 3+） | `opus` | Sonnet 循环无法解决时 |
+| 文档 agent | `haiku` | 安全——仅文档，绝不涉及生产代码 |
+| Git commit agent | `haiku` | 确定性、低风险任务 |
+| 代码库搜索 / 探索 | `haiku` | 编码开始前的只读操作 |
 
-| Task | `subagent_type` | Access Level |
-|------|----------------|-------------|
-| Coding / implementation | `general-purpose` | Full (Read, Edit, Write, Bash, Glob, Grep) |
-| Code review | `code-reviewer` or language-specific (`python-reviewer`, etc.) | Read-only (Read, Glob, Grep) |
-| Codebase exploration / gap analysis | `Explore` | Read-only (no Edit, Write) |
-| Architecture / planning | `architect` or `Plan` | Read-only |
-| Documentation | `general-purpose` (model: `haiku`) | Full |
-| Git operations | `general-purpose` (model: `haiku`) | Full (prompt restricts to git commands) |
-
----
-
-## Teams vs Individual Agents
-
-Not all parallel work benefits from Teams. Teams add coordination overhead (TeamCreate → TaskCreate → spawn → assign → message → TeamDelete). Use the right tool:
-
-| Scenario | Use | Why |
-|----------|-----|-----|
-| Reviews (code, security, functional) | **Individual parallel Agent calls** | Read-only, short-lived, no inter-agent communication needed |
-| 2+ independent coding tasks on different files | **Teams** (if available) | Long-running, benefit from shared task list and progress tracking |
-| Single coding task | **Individual Agent** | No coordination needed |
-| Architecture / planning | **Individual Agent** | One-shot analysis, no coordination |
-
-**Teams workflow** (when using Teams for parallel dev):
-1. `TeamCreate(team_name: "phase-2-dev")` — creates team + task list
-2. `TaskCreate(...)` for each coding task
-3. `Agent(team_name: "phase-2-dev", name: "task-a-coder", subagent_type: "general-purpose", model: "sonnet", ...)` per teammate
-4. `TaskUpdate(owner: "task-a-coder")` to assign tasks
-5. Wait for automatic message delivery when teammates complete
-6. After all done: `SendMessage(to: each_teammate, message: {type: "shutdown_request"})` then `TeamDelete()`
+**禁止 Haiku 编写生产代码。**
 
 ---
 
-## Mandatory Review (after every sub-agent delivery)
+## Agent 工具隔离
 
-Run **all active review slots in parallel** — never skip, never merge into one agent.
+使用正确的 `subagent_type` 强制工具限制。当存在受限类型时，不要使用 `general-purpose`。
 
-**Always use individual parallel Agent calls for reviews** — launch all review agents simultaneously in a single Agent call batch. Do NOT use Teams for reviews (they are read-only, short-lived, and don't need inter-agent coordination).
+| 任务 | `subagent_type` | 访问级别 |
+|------|----------------|---------|
+| 编码 / 实现 | `general-purpose` | 完全（Read、Edit、Write、Bash、Glob、Grep） |
+| 代码 review | `code-reviewer` 或语言专项（`python-reviewer` 等） | 只读（Read、Glob、Grep） |
+| 代码库探索 / 差距分析 | `Explore` | 只读（无 Edit、Write） |
+| 架构 / 规划 | `architect` 或 `Plan` | 只读 |
+| 文档 | `general-purpose`（model: `haiku`） | 完全 |
+| Git 操作 | `general-purpose`（model: `haiku`） | 完全（prompt 限制为 git 命令） |
+
+---
+
+## Teams 与单独 Agent 的选择
+
+不是所有并行工作都适合用 Teams。Teams 增加协调开销（TeamCreate → TaskCreate → 启动 → 分配 → 消息 → TeamDelete）。选择合适的方式：
+
+| 场景 | 使用方式 | 原因 |
+|------|---------|------|
+| Review（代码、安全、功能） | **单独并行 Agent 调用** | 只读、短周期、不需要 agent 间通信 |
+| 2+ 个独立编码任务涉及不同文件 | **Teams**（如果可用） | 长周期、受益于共享任务列表和进度跟踪 |
+| 单个编码任务 | **单独 Agent** | 无需协调 |
+| 架构 / 规划 | **单独 Agent** | 一次性分析，无需协调 |
+
+**Teams 工作流**（用 Teams 进行并行开发时）：
+1. `TeamCreate(team_name: "phase-2-dev")` — 创建团队 + 任务列表
+2. `TaskCreate(...)` 为每个编码任务创建
+3. `Agent(team_name: "phase-2-dev", name: "task-a-coder", subagent_type: "general-purpose", model: "sonnet", ...)` 为每个队友
+4. `TaskUpdate(owner: "task-a-coder")` 分配任务
+5. 等待队友完成时自动收到消息
+6. 全部完成后：`SendMessage(to: each_teammate, message: {type: "shutdown_request"})` 然后 `TeamDelete()`
+
+---
+
+## 强制 Review（每次子 agent 交付后）
+
+**并行运行所有已激活的 review slot** — 不跳过、不合并到一个 agent。
+
+**Review 始终使用单独并行 Agent 调用** — 在一次 Agent 调用批次中同时启动所有 review agent。不要用 Teams 做 review（它们是只读、短周期的，不需要 agent 间协调）。
 
 **固定 review（每次必须全部通过）：**
 
-- **Slot 1 — Code Review**：优先语言专项 skill → fallback 通用 `code-reviewer` agent
-- **Slot 2 — Security Review**：优先领域专项 skill → `security-review` skill → fallback 通用 `security-reviewer` agent
-- **Slot 3 — Functional Coverage**：永远是 `functional-coverage` skill，无替代
+- **Slot 1 — 代码 Review**：优先语言专项 skill → fallback 通用 `code-reviewer` agent
+- **Slot 2 — 安全 Review**：优先领域专项 skill → `security-review` skill → fallback 通用 `security-reviewer` agent
+- **Slot 3 — 功能覆盖**：永远是 `functional-coverage` skill，无替代
 
 **条件性 review（Phase 0 激活后每次同样必须通过）：**
 
@@ -207,34 +258,34 @@ Run **all active review slots in parallel** — never skip, never merge into one
 - **Slot 6 — 类型设计 review**（TypeScript / 强类型时）：`type-design-analyzer` agent
 - **Slot 7 — 错误处理 review**（推荐默认开启）：`silent-failure-hunter` agent
 - **Slot 8 — 性能 review**（高性能要求时）：`performance-optimizer` agent
-- **Slot 9 — 临床安全 review**（医疗领域时）：`healthcare-reviewer` agent (opus)
+- **Slot 9 — 临床安全 review**（医疗领域时）：`healthcare-reviewer` agent（opus）
 
-**一个任务未通过所有已激活 review slots，不得标记为完成。**
+**一个任务未通过所有已激活 review slot，不得标记为完成。**
 
-### Review Escalation Protocol (3-Round Cap)
+### Review 升级协议（3 轮上限）
 
-| Round | Action | Model |
-|-------|--------|-------|
-| Round 1 | Sub-agent implements fixes from review | sonnet |
-| Round 2 | Sub-agent re-reviews + targeted fix | sonnet |
-| Round 3 | **Orchestrator intervenes** — choose one: | |
-| | → Accept with documented risk | — |
-| | → Rearchitect the component | sonnet |
-| | → Opus arbitration (final call) | opus |
+| 轮次 | 操作 | 模型 |
+|------|------|------|
+| Round 1 | 子 agent 根据 review 意见实施修复 | sonnet |
+| Round 2 | 子 agent 重新 review + 针对性修复 | sonnet |
+| Round 3 | **编排器介入** — 选择其一： | |
+| | → 接受并记录风险 | — |
+| | → 重新架构该组件 | sonnet |
+| | → Opus 仲裁（最终裁定） | opus |
 
-Round 3 decision + full rationale must be recorded in PROGRESS.md.
+Round 3 的决策 + 完整理由必须记录在 PROGRESS.md 中。
 
 ---
 
-## Progress File Format
+## 进度文件格式
 
-Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is the sole recovery document.
+维护 `docs/progress/PROGRESS.md`。始终保持最新——这是唯一的恢复文档。
 
 ```markdown
 ## Project: [name]
 
 ## Spec Files
-<!-- Source of truth for re-planning. List all original spec/PRD/design files. -->
+<!-- 重新规划的事实来源。列出所有原始 spec/PRD/设计文件。 -->
 - [path/to/prd.md]
 - [path/to/design.md]
 - [path/to/any-other-spec.md]
@@ -242,21 +293,21 @@ Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is t
 ## Current Phase: [phase name]
 
 ## Interruption Reason
-<!-- Set ONLY when work is paused by the system. Clear after successful resume. -->
-<!-- Values: rate-limit-5h | rate-limit-7d | context-limit | (blank = no interruption) -->
+<!-- 仅在系统暂停工作时设置。成功恢复后清除。 -->
+<!-- 取值: rate-limit-5h | rate-limit-7d | context-limit |（空 = 无中断） -->
 
 
 ## Rate Limit State
-<!-- Filled only when Interruption Reason = rate-limit-5h. Clear after resume. -->
+<!-- 仅在 Interruption Reason = rate-limit-5h 时填写。恢复后清除。 -->
 <!-- refresh_at: [ISO timestamp of next quota reset] -->
 
 
-## Review Roster (set in Phase 0, do not change mid-project)
+## Review Roster (Phase 0 设定，项目中途不变)
 固定:
 - Slot 1 Code Review: [skill name or "generic code-reviewer"]
 - Slot 2 Security Review: [skill name or "generic security-reviewer"]
 - Slot 3 Functional Coverage: functional-coverage (always)
-条件性 (激活的才列出):
+条件性 (仅列出已激活的):
 - Slot 4 DB Review: [database-reviewer / N/A]
 - Slot 5 A11y Review: [a11y-architect / N/A]
 - Slot 6 Type Review: [type-design-analyzer / N/A]
@@ -265,7 +316,7 @@ Maintain `docs/progress/PROGRESS.md`. Keep it current at all times — this is t
 - Slot 9 Clinical Review: [healthcare-reviewer / N/A]
 
 ## Active Task
-<!-- Include sub-task progress so Mode A can resume mid-task. -->
+<!-- 包含子任务进度，以便模式 A 可以中途恢复。 -->
 [task name] — assigned to: [agent type]
 Sub-task progress: [what is done within this task / what remains]
 Relevant files: [list of files being modified]
@@ -289,103 +340,103 @@ Relevant files: [list of files being modified]
 - [date] Risk accepted: ... Reason: ...
 
 ## Next Agent Prompt
-<!-- MAX 30 LINES. Include only: project name+path, language+stack,
-     the specific task to execute, files to modify, and key constraints.
-     Do NOT include full architecture descriptions or session history. -->
+<!-- 最多 30 行。仅包含：项目名+路径、语言+技术栈、
+     要执行的具体任务、要修改的文件、关键约束。
+     不要包含完整架构描述或会话历史。 -->
 [Exact prompt — no external context assumed]
 ```
 
-**Template rules:**
-- Use ONLY the sections defined above. Do not invent custom sections (e.g., "Technology Stack", "Directory Layout", "Session Rules").
-- Any project-specific context (tech stack, directory structure, session overrides) belongs in `## Key Decisions & Accepted Risks` or `## Next Agent Prompt`, not in new sections.
+**模板规则：**
+- 仅使用上面定义的 section。不要发明自定义 section（如 "Technology Stack"、"Directory Layout"、"Session Rules"）。
+- 任何项目特定上下文（技术栈、目录结构、会话覆盖）放在 `## Key Decisions & Accepted Risks` 或 `## Next Agent Prompt` 中，不要放在新 section 里。
 
 ---
 
-## Git Commit Policy
+## Git Commit 策略
 
-- Orchestrator triggers commits via **git-agent (haiku)** after each task milestone
-- Commit only after ALL three review statuses are PASS (or formally escalated with recorded rationale)
-- Format: `<type>: <description>` (conventional commits — feat, fix, refactor, docs, test, chore)
+- 编排器在每个任务里程碑后通过 **git-agent（haiku）** 触发提交
+- 仅在所有三个 review 状态均为 PASS（或经过正式升级并记录理由）后才提交
+- 格式：`<type>: <description>`（conventional commits — feat、fix、refactor、docs、test、chore）
 
-### Pre-Commit Secret Scan (mandatory)
+### 提交前密钥扫描（强制）
 
-Before every commit, git-agent **must** run `git diff --staged` and scan for the following patterns. If any match is found, **abort the commit immediately** and escalate to Orchestrator.
+每次提交前，git-agent **必须**运行 `git diff --staged` 并扫描以下模式。如果有任何匹配，**立即中止提交**并向编排器升级。
 
-| Category | Patterns to detect |
-|----------|--------------------|
-| API keys | `sk-`, `AIza`, `AKIA`, `xoxb-`, `xoxp-`, `ghp_`, `gho_`, `github_pat_` |
-| Secrets / passwords | variable names containing `secret`, `password`, `passwd`, `pwd`, `token`, `api_key`, `apikey`, `auth_key` assigned to a string literal |
-| Private keys | `-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN OPENSSH PRIVATE KEY-----` |
-| Connection strings | `mongodb+srv://`, `postgres://`, `mysql://` containing credentials (i.e., `://user:pass@`) |
-| `.env` files | Any staged file named `.env`, `.env.local`, `.env.production`, `*.pem`, `*.p12`, `*.pfx` |
+| 类别 | 要检测的模式 |
+|------|------------|
+| API 密钥 | `sk-`、`AIza`、`AKIA`、`xoxb-`、`xoxp-`、`ghp_`、`gho_`、`github_pat_` |
+| 密码 / 凭据 | 变量名包含 `secret`、`password`、`passwd`、`pwd`、`token`、`api_key`、`apikey`、`auth_key` 且赋值为字符串字面量 |
+| 私钥 | `-----BEGIN RSA PRIVATE KEY-----`、`-----BEGIN EC PRIVATE KEY-----`、`-----BEGIN OPENSSH PRIVATE KEY-----` |
+| 连接字符串 | `mongodb+srv://`、`postgres://`、`mysql://` 且包含凭据（即 `://user:pass@`） |
+| `.env` 文件 | 任何暂存的 `.env`、`.env.local`、`.env.production`、`*.pem`、`*.p12`、`*.pfx` 文件 |
 
-**Escalation on detection:**
+**检测到后的升级流程：**
 
-1. git-agent aborts the commit and reports the exact file + line to Orchestrator
-2. Orchestrator uses **security-reviewer** agent (sonnet) to assess severity
-3. If confirmed sensitive: remove from staging (`git reset HEAD <file>`), rotate the exposed secret, then re-commit
-4. Record the incident in PROGRESS.md under `## Key Decisions & Accepted Risks`
+1. git-agent 中止提交并向编排器报告确切文件 + 行号
+2. 编排器使用 **security-reviewer** agent（sonnet）评估严重性
+3. 如确认敏感：从暂存区移除（`git reset HEAD <file>`），轮换泄露的密钥，然后重新提交
+4. 在 PROGRESS.md 的 `## Key Decisions & Accepted Risks` 中记录事件
 
-**False positive handling:** If git-agent flags a pattern that is clearly a placeholder (e.g., `"your-api-key-here"`), Orchestrator may approve proceeding — decision must be recorded in PROGRESS.md.
+**误报处理：** 如果 git-agent 标记的模式明显是占位符（如 `"your-api-key-here"`），编排器可批准继续——决策必须记录在 PROGRESS.md 中。
 
 ---
 
-## Context Window Management
+## 上下文窗口管理
 
-- Monitor context usage continuously
-- `## Next Agent Prompt` must always be current and self-contained for recovery
-- **Compaction resilience:** After `/compact`, this skill's description may not be re-injected. PROGRESS.md is the compaction survival mechanism — all state needed to resume lives there, not in conversation history. The Recovery Protocol handles post-compaction restart automatically.
-- Operate autonomously without user approval between steps — except:
-  - **Phase 0** verification (before any code is written)
-  - **90% context** checkpoint
-  - **Round 3 escalation** (Orchestrator decision required)
+- 持续监控上下文使用情况
+- `## Next Agent Prompt` 必须始终保持最新且自包含，以便恢复
+- **压缩韧性：** `/compact` 后，此 skill 的描述可能不会被重新注入。PROGRESS.md 是压缩生存机制——恢复所需的所有状态都在那里，而不是在对话历史中。恢复协议自动处理压缩后的重启。
+- 在步骤之间自主运行，无需用户批准——以下情况除外：
+  - **Phase 0** 验证（写代码前）
+  - **90% 上下文** 检查点
+  - **Round 3 升级**（需要编排器决策）
 
-### 90% Context Threshold
+### 90% 上下文阈值
 
-When context reaches **90%**:
+当上下文达到 **90%** 时：
 
-1. **Freeze agent spawning** — let the current in-flight agent finish; spawn nothing new
-2. **Flush PROGRESS.md** — set `## Interruption Reason: context-limit`, ensure `## Active Task` sub-task progress is accurate, ensure `## Next Agent Prompt` is complete and self-contained
-3. **Notify user** and stop:
+1. **冻结 agent 启动** — 让当前进行中的 agent 完成；不再启动新的
+2. **刷新 PROGRESS.md** — 设置 `## Interruption Reason: context-limit`，确保 `## Active Task` 子任务进度准确，确保 `## Next Agent Prompt` 完整且自包含
+3. **通知用户**并停止：
 
-   > **⚠️ Context at 90% — agent work paused**
-   > PROGRESS.md updated. Resume by running:
+   > **⚠️ 上下文已达 90% — agent 工作已暂停**
+   > PROGRESS.md 已更新。通过以下命令恢复：
    > `/start-project docs/progress/PROGRESS.md`
 
 ---
 
-## Rate Limit Handling
+## 频率限制处理
 
-### 5-Hour Usage Limit — at 80% consumed
+### 5 小时用量限制 — 消耗达 80% 时
 
-1. **Freeze agent spawning** — let current in-flight agent finish
-2. Run `date` to capture current system time
-3. Extract next refresh timestamp from the rate limit error/response
-4. Compute `wait_seconds = refresh_time − now`
-5. **Flush PROGRESS.md** — set `## Interruption Reason: rate-limit-5h`, set `## Rate Limit State: refresh_at: [timestamp]`
-6. Ensure `## Next Agent Prompt` is complete
-7. Call `ScheduleWakeup(delaySeconds: wait_seconds, prompt: "<<autonomous-loop-dynamic>>")` — **only one ScheduleWakeup may be active at a time**; if one already exists, cancel it before setting a new one
-8. On wake-up: enter **Mode A (Continuation)** automatically — no user input needed
+1. **冻结 agent 启动** — 让当前进行中的 agent 完成
+2. 运行 `date` 获取当前系统时间
+3. 从频率限制错误/响应中提取下次刷新时间戳
+4. 计算 `wait_seconds = refresh_time − now`
+5. **刷新 PROGRESS.md** — 设置 `## Interruption Reason: rate-limit-5h`，设置 `## Rate Limit State: refresh_at: [timestamp]`
+6. 确保 `## Next Agent Prompt` 完整
+7. 调用 `ScheduleWakeup(delaySeconds: wait_seconds, prompt: "<<autonomous-loop-dynamic>>")` — **同一时间只能有一个 ScheduleWakeup**；如果已存在一个，先取消再设置新的
+8. 唤醒后：自动进入**模式 A（续接）** — 无需用户输入
 
-### 7-Day Subscription Limit — at 90% consumed
+### 7 天订阅限制 — 消耗达 90% 时
 
-1. **Freeze agent spawning** immediately
-2. **Flush PROGRESS.md** — set `## Interruption Reason: rate-limit-7d`
-3. Notify user and stop:
+1. **立即冻结 agent 启动**
+2. **刷新 PROGRESS.md** — 设置 `## Interruption Reason: rate-limit-7d`
+3. 通知用户并停止：
 
-   > **⚠️ 7-day quota at 90% — agent work paused**
-   > Remaining quota preserved. PROGRESS.md updated.
-   > Resume when quota resets by running:
+   > **⚠️ 7 天配额已达 90% — agent 工作已暂停**
+   > 剩余配额已保留。PROGRESS.md 已更新。
+   > 配额重置后通过以下命令恢复：
    > `/start-project docs/progress/PROGRESS.md`
 
-4. Do **not** set ScheduleWakeup — 7-day reset timing is unpredictable; wait for user to resume manually
+4. **不要**设置 ScheduleWakeup — 7 天重置时间不可预测；等待用户手动恢复
 
 ---
 
-## Phase Completion
+## 阶段完成
 
-When all tasks in a phase are done:
-1. Run doc-agent (haiku) to update README and relevant docs
-2. Run git-agent (haiku) for final phase commit
-3. Move `docs/progress/PROGRESS.md` to `docs/archive/PROGRESS-[phase]-[date].md`
-4. Create new PROGRESS.md for next phase if applicable
+当一个阶段的所有任务完成后：
+1. 运行 doc-agent（haiku）更新 README 和相关文档
+2. 运行 git-agent（haiku）进行阶段最终提交
+3. 将 `docs/progress/PROGRESS.md` 移动到 `docs/archive/PROGRESS-[phase]-[date].md`
+4. 如果适用，为下一阶段创建新的 PROGRESS.md
