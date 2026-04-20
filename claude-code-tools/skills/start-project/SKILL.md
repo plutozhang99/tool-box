@@ -48,9 +48,22 @@ Once execution begins, these rules are mandatory. They are also written into PRO
    Then have another sub-agent fix **all** issues the reviews surface.
    **This step is non-negotiable** — every delivery gets the full review pass. Never collapse it into a single agent.
 3. **Keep PROGRESS.md live.** Update it at every task start, task end, review result, and commit. This is the recovery substrate when the context window runs out.
+
+   **Task-done bookkeeping is bidirectional**: when a task clears review + commits, you must *both* add it to `What's Done` *and* remove its entry from `Next Steps` in the same edit. Never only append to `What's Done` — the two sections drift, stale `[ ]` items leak into the archive, and reviewers can't tell what's actually pending. If you catch yourself editing only one of the two, stop and fix both.
 4. **Commit proactively.** The moment a task clears all reviews, dispatch a git-commit sub-agent. Do not wait for user approval.
 5. **Auto-advance.** Until the context limit is reached, keep working through the plan. Do not pause for user approval on each step.
 6. **Phase completion archival.** When *all* tasks in PROGRESS.md are done, move `docs/progress/PROGRESS.md` to `docs/archive/PROGRESS-[name]-[YYYYMMDD].md`. If only one phase (not all tasks) is complete, just update PROGRESS.md — do not move or archive yet.
+
+   **Before archiving, a doc-updater sub-agent must sanitize the file** — an archive is a historical record, not a live tracker. Required cleanup:
+   - **Delete** `Next Steps` section entirely (or replace with a one-line "All tasks complete. Next phase: [name] — will start a fresh PROGRESS.md.").
+     - No stragglers: no `[ ]` unchecked boxes, no "archiving this file" self-references, no forward-looking TODOs.
+   - **Delete** `Next Agent Prompt` section entirely — it has no meaning once the phase is done.
+   - **Delete** `Interruption Reason` section (or leave empty) — it's live-session state.
+   - **Delete** `Orchestrator Rules (for future sessions)` — future sessions read the skill, not the archive.
+   - **Keep**: Project name, Spec Files, Plan File, Project Structure, DESIGN.md, Current Phase (rename to "Phase: [name] — COMPLETE"), Review Roster, What's Done, Notes / Gotchas.
+   - Verify every `What's Done` entry has a commit SHA. If any are missing, flag to the user before archiving.
+
+   After the doc-updater finishes, the Orchestrator must `Read` the archived file and confirm no stale forward-looking content remains before moving on.
 
 ---
 
