@@ -6,7 +6,7 @@
 
 | 来源 | 仓库 | 说明 |
 |------|------|------|
-| 自定义 | [plutozhang99/tool-box](https://github.com/plutozhang99/tool-box) | 本仓库，3 个原创 skill |
+| 自定义 | [plutozhang99/tool-box](https://github.com/plutozhang99/tool-box) | 本仓库，4 个原创 skill |
 | 第三方 | [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | 156 个 skill，Anthropic 黑客松获奖项目 |
 
 ## 安装
@@ -17,7 +17,8 @@ git clone git@github.com:plutozhang99/tool-box.git ~/Documents/tool-box/tool-box
 git clone https://github.com/affaan-m/everything-claude-code ~/Documents/tool-box/everything-claude-code
 
 # 2. 安装自定义 skills（逐个 symlink）
-ln -sf ~/Documents/tool-box/claude-code-tools/skills/start-project ~/.claude/skills/start-project
+ln -sf ~/Documents/tool-box/claude-code-tools/skills/plan-project ~/.claude/skills/plan-project
+ln -sf ~/Documents/tool-box/claude-code-tools/skills/execute-phase ~/.claude/skills/execute-phase
 ln -sf ~/Documents/tool-box/claude-code-tools/skills/functional-coverage ~/.claude/skills/functional-coverage
 ln -sf ~/Documents/tool-box/claude-code-tools/skills/design-picker ~/.claude/skills/design-picker
 
@@ -35,23 +36,43 @@ cd ~/Documents/tool-box/everything-claude-code && git pull
 
 ## 自定义 Skills（本仓库原创）
 
-### `/start-project`
+### `/plan-project`
 
-**触发方式：** `/start-project {path}` 或 "start project"、"initialize project"
+**触发方式：** `/plan-project {path}` 或 "plan project"、"start project"、"new project"
 
-启动完整 CTO 编排模式。Claude 读取 `{path}` 处的需求文档，完成规划和用户确认后，自主编排 sub-agents 进行开发，强制执行三路 review 和 git 里程碑。
+对话式项目规划 skill。读取 `{path}` 处的 spec/PRD（或纯口头描述），与用户头脑风暴后，把工作拆分成细粒度的 phase（Phase N → Tx.x），写入 `docs/plans/PLAN-<name>.md`，每个 phase 和 task 前面带 `[ ]` checkbox，架构与隐性决策记录在 PLAN 内。**写完即停，不写代码、不调用 sub-agent。**执行交给 `/execute-phase`。
 
 **核心机制：**
-- 模型分工 — 生产代码统一用 Sonnet，架构/安全/升级决策用 Opus，文档/git/搜索用 Haiku
-- 每次交付后强制三路并行 review：code-review + security-review + `/functional-coverage`
-- 3 轮 review 上限 — Round 3 触发 CTO 介入（接受风险 / 重构 / Opus 仲裁）
-- 每个 agent 类型有工具隔离和 `max_turns` 限制
-- `docs/progress/PROGRESS.md` 实时进度文件，用于上下文恢复
-- 支持 Agent Teams（需设置 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`）
+- 完全对话驱动，不允许跳过用户确认
+- Phase 粒度由对话保证，不强加数值阈值
+- 写完后明确告知用户 "Run `/execute-phase` when ready"
 
 **示例：**
 ```
-/start-project ./specs/my-app.md
+/plan-project ./specs/my-app.md
+```
+
+---
+
+### `/execute-phase`
+
+**触发方式：** 仅手动触发（带 `disable-model-invocation: true`，避免 Claude 误启动）。`/execute-phase` 或 "execute phase"、"continue plan"。
+
+读取 `docs/plans/PLAN-*.md`，执行**一个 phase 即停**。启动时与用户确认要做哪个 phase + 关键决策点 → 用户拍板 → auto-advance 跑完所有 task → phase 末三路 opus review（code/security/functional 并行）→ 用户挑要修的 finding → 修复 → 勾选 PLAN.md 的 checkbox → 归档 PROGRESS.md → 停。
+
+**核心机制：**
+- 模型分工 — coding 用 Sonnet（官方"best coding model"）；phase-end review 用 Opus 三路并行；commit/doc 用 Haiku
+- Review 时机改在 **phase 末**（不再每个 task 后跑），并行的 3 个 reviewer 共享 system-prompt 前缀以命中 prompt cache
+- 用户挑选 fix：CRITICAL/HIGH 修完做定向 re-review，MEDIUM/LOW 修完只跑 lint+build+test 自检
+- `docs/progress/PROGRESS.md` 仅作 phase 内会话恢复缓冲（精简到 ~20 行，每次更新 ≤ 2 个 Edit）
+- PLAN.md checkbox 从 `[ ]` → `[x]`，归档时把 phase 内的隐性决策回填到 PLAN.md 的对应 block
+- 一个 phase 跑完即停，下一个 phase 由用户重新调用
+
+**示例：**
+```
+/execute-phase           # 自动找下一个未勾选的 phase
+/execute-phase 2         # 指定 phase
+/execute-phase 2.1       # 只做某个子任务
 ```
 
 ---
