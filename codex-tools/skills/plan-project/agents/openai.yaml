@@ -1,0 +1,7 @@
+interface:
+  display_name: "Plan Project"
+  short_description: "Turn a spec into a phased execution plan"
+  default_prompt: "Use $plan-project to turn this spec into a phased implementation plan."
+
+policy:
+  allow_implicit_invocation: true

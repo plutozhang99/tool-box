@@ -1,0 +1,7 @@
+interface:
+  display_name: "Execute Phase"
+  short_description: "Implement one planned phase with review"
+  default_prompt: "Use $execute-phase to complete the next unchecked phase in the project plan."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Functional Coverage"
+  short_description: "Check requirements against code and tests"
+  default_prompt: "Use $functional-coverage to verify this feature is implemented and tested."
+
+policy:
+  allow_implicit_invocation: true

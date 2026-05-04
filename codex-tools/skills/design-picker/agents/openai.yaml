@@ -1,0 +1,7 @@
+interface:
+  display_name: "Design Picker"
+  short_description: "Create a DESIGN.md from brand references"
+  default_prompt: "Use $design-picker to create a project DESIGN.md before UI work."
+
+policy:
+  allow_implicit_invocation: true
