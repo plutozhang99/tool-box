@@ -5,40 +5,46 @@ import time
 import sys
 import signal
 
+USER_PAUSE_SECS = 3 * 60  # pause duration when user moves mouse
 
-def signal_handler(sig, frame):
+
+def signal_handler(sig, frame) -> None:
     print('\nProgram terminated by user')
     sys.exit(0)
 
 
-def main():
-    # 设置安全退出
-    signal.signal(signal.SIGINT, signal_handler)
+def user_moved(expected_x: int, expected_y: int) -> bool:
+    x, y = pyautogui.position()
+    return (x, y) != (expected_x, expected_y)
 
-    # 添加失败保护
+
+def main() -> None:
+    signal.signal(signal.SIGINT, signal_handler)
     pyautogui.FAILSAFE = True
 
     print("Mouse mover started. Press Ctrl+C to exit.")
 
     try:
         while True:
-            # 当前鼠标位置
-            currentMouseX, currentMouseY = pyautogui.position()
-            print(f"Current position: ({currentMouseX}, {currentMouseY})")
+            start_x, start_y = pyautogui.position()
+            print(f"Current position: ({start_x}, {start_y})")
 
-            # 移动鼠标到新的位置
-            pyautogui.moveTo(currentMouseX + 100, currentMouseY + 100)
+            pyautogui.moveTo(start_x + 100, start_y + 100)
             print("Moved to new position")
-
-            # 等待一段时间
             time.sleep(20)
 
-            # 移动回原来的位置
-            pyautogui.moveTo(currentMouseX, currentMouseY)
+            if user_moved(start_x + 100, start_y + 100):
+                print("User moved mouse — pausing 3 minutes before resuming.")
+                time.sleep(USER_PAUSE_SECS)
+                continue
+
+            pyautogui.moveTo(start_x, start_y)
             print("Moved back to original position")
-
-            # 再次等待一段时间
             time.sleep(20)
+
+            if user_moved(start_x, start_y):
+                print("User moved mouse — pausing 3 minutes before resuming.")
+                time.sleep(USER_PAUSE_SECS)
 
     except Exception as e:
         print(f"An error occurred: {e}")
