@@ -35,7 +35,7 @@ The skill reads the supplied spec if there is one, discusses tradeoffs with you,
 
 Use when a project already has a `docs/plans/PLAN-*.md` and you want Codex to complete one phase.
 
-The skill executes a single phase, keeps `docs/progress/PROGRESS.md` current, runs local verification, uses `phase-review` for the phase-end review, updates the plan checkboxes, archives progress under `docs/archive/<plan-name>/`, archives completed plans under `docs/archive/plans/`, commits the phase, pushes it to GitHub, then stops. It does not require `everything-claude-code`.
+The skill executes a single phase, keeps `docs/progress/PROGRESS.md` current, runs local verification, uses `phase-review` for the phase-end review, updates the plan checkboxes, archives progress under `docs/archive/<plan-name>/`, copies completed plans to dated files under `docs/archive/plans/`, commits the phase, pushes it to GitHub, then stops. It does not require `everything-claude-code`.
 
 The phase-end review uses `phase-review`, which includes:
 
