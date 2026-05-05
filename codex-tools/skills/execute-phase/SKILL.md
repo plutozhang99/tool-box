@@ -1,6 +1,6 @@
 ---
 name: execute-phase
-description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification, use phase-review for the phase-end review, update checkboxes, commit, push to GitHub, archive progress by plan name, archive completed plans, then stop.
+description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification, use phase-review for the phase-end review, update checkboxes, commit, push to GitHub, archive progress by plan name, move completed plans into the archive, then stop.
 ---
 
 # Execute Phase
@@ -98,9 +98,9 @@ When the confirmed scope passes review or the user accepts remaining risk:
 4. Move `docs/progress/PROGRESS.md` to `docs/archive/<plan-name>/PROGRESS-<phase-id>-<YYYYMMDD>.md`. Create the `<plan-name>` folder first if needed.
 5. Check whether every phase and task in the active plan is now complete.
    - If the plan still has unchecked phase or task boxes, leave it in `docs/plans/`.
-   - If the plan is complete, copy the completed plan to `docs/archive/plans/<plan-stem>-<YYYYMMDD>.md`. Create `docs/archive/plans/` first if needed. Keep the completed source plan in `docs/plans/`.
+   - If the plan is complete, move and rename the completed plan to `docs/archive/plans/<plan-stem>-<YYYYMMDD>.md`. Create `docs/archive/plans/` first if needed. Use `git mv` when the source plan is tracked.
 6. Inspect `git status --short` and `git diff` to identify only the files changed for this phase.
-7. Stage the phase implementation, plan update, archived progress file, and archived completed plan copy if created. Exclude unrelated user changes.
+7. Stage the phase implementation, plan update or completed-plan move, archived progress file, and archived completed plan if created. Exclude unrelated user changes.
 8. Commit with a concise phase-scoped message, such as `Complete phase <N>: <phase name>`.
 9. Push the current branch to its GitHub remote. If no upstream is configured, push to `origin HEAD` and set upstream when appropriate.
 10. If commit or push cannot complete because of auth, missing remote, branch protection, merge conflicts, or environment restrictions, leave the completed work uncommitted or unpushed as appropriate, record the blocker in the final response, and do not start the next phase.
@@ -112,8 +112,6 @@ For `PLAN-flutter-migration.md` with three phases completed across two days, arc
 
 ```text
 docs/
-|-- plans/
-|   `-- PLAN-flutter-migration.md
 `-- archive/
     |-- flutter-migration/
     |   |-- PROGRESS-1-20260504.md
@@ -123,4 +121,4 @@ docs/
         `-- PLAN-flutter-migration-20260505.md
 ```
 
-After the final phase is archived, keep the original completed plan in `docs/plans/` and also keep the dated copy under `docs/archive/plans/`.
+After the final phase is archived, the completed plan should no longer remain in `docs/plans/`; it lives only at the dated path under `docs/archive/plans/`.
