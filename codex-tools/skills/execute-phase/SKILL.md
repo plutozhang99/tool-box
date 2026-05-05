@@ -1,13 +1,13 @@
 ---
 name: execute-phase
-description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification and a Codex-native phase-end review bundle, update checkboxes, archive progress, then stop.
+description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification, use phase-review for the phase-end review, update checkboxes, commit, push to GitHub, archive progress, then stop.
 ---
 
 # Execute Phase
 
-You are the phase implementer and reviewer. Execute one phase per invocation, then stop.
+You are the phase implementer. Execute one phase per invocation, run the `phase-review` skill for the phase-end review, commit and push the completed phase, then stop.
 
-Unlike the Claude version of this workflow, do not assume access to `everything-claude-code`, Claude slash commands, or model routing. Use Codex's normal repository editing tools, local test/build/lint commands, and review discipline. Spawn subagents only when the user explicitly asks for delegation or parallel agent work.
+Unlike the Claude version of this workflow, do not assume access to `everything-claude-code`, Claude slash commands, or model routing. Use Codex's normal repository editing tools, local test/build/lint commands, and the local `phase-review` skill. Spawn subagents only when the user explicitly asks for delegation or parallel agent work.
 
 ## Startup
 
@@ -26,7 +26,8 @@ Unlike the Claude version of this workflow, do not assume access to `everything-
 - Keep edits scoped to the phase.
 - Update `docs/progress/PROGRESS.md` after meaningful milestones and before any risky context boundary.
 - Use local verification commands appropriate to the project. If there is no obvious command, inspect package files or docs to identify one.
-- Do not commit unless the user explicitly asks for commits.
+- Commit and push only after the confirmed scope passes review or the user accepts remaining risk.
+- Do not include unrelated user changes in the commit.
 - Do not start the next phase.
 
 ## Progress File
@@ -57,34 +58,20 @@ Keep `docs/progress/PROGRESS.md` lean:
 
 Batch progress edits. Do not rewrite the file after every minor action.
 
-## Phase-End Review Bundle
+## Phase-End Review
 
-At the end of the confirmed scope, review the phase diff before marking it complete. Since there is no `everything-claude-code` equivalent for GPT/Codex, perform this Codex-native review bundle:
+At the end of the confirmed scope, use the `phase-review` skill before marking the phase complete.
 
-1. Code review
-   - Inspect the changed files and relevant call sites.
-   - Lead with bugs, regressions, broken contracts, missing tests, and maintainability risks.
-   - Use file and line references.
+Provide `phase-review` with:
 
-2. Security review
-   - Check auth and authorization boundaries.
-   - Check input validation, injection risks, path traversal, secrets, logging of sensitive data, unsafe deserialization, and destructive operations.
-   - For frontend work, check XSS and unsafe HTML/script handling.
-   - For dependency changes, check whether new packages are necessary and pinned consistently with the project.
+- The active `docs/plans/PLAN-*.md` phase and task scope.
+- The current diff for the phase.
+- Verification commands already run and their results.
+- Any known implementation decisions, skipped tests, or environment blockers from `docs/progress/PROGRESS.md`.
 
-3. Functional coverage review
-   - Extract each planned requirement from the phase tasks.
-   - Verify implementation evidence.
-   - Verify tests have meaningful assertions.
-   - Return PASS only if every required behavior is implemented and tested, or if the user explicitly accepts an untested risk.
+Let `phase-review` perform the code correctness, security, functional coverage, and verification assessment. Preserve its findings-first output format.
 
-4. Verification commands
-   - Run the smallest relevant lint, typecheck, build, and test commands.
-   - If a command cannot run, record the exact reason.
-
-## Review Output
-
-If issues are found, present them in this format and ask the user which to fix:
+If issues are found, present them to the user and ask which to fix:
 
 ```text
 [<SEVERITY>] <file>:<line> - <one-line issue>
@@ -108,4 +95,9 @@ When the confirmed scope passes review or the user accepts remaining risk:
 1. Update the relevant `PLAN.md` phase and task checkboxes from `[ ]` to `[x]`.
 2. Fill `Decisions Made During This Phase` with decisions and rationale discovered during implementation.
 3. Move `docs/progress/PROGRESS.md` to `docs/archive/PROGRESS-<phase-id>-<YYYYMMDD>.md`.
-4. Tell the user: `Phase <N> complete. Ask Codex to run execute-phase to continue with the next phase.`
+4. Inspect `git status --short` and `git diff` to identify only the files changed for this phase.
+5. Stage the phase implementation, plan update, and archived progress file. Exclude unrelated user changes.
+6. Commit with a concise phase-scoped message, such as `Complete phase <N>: <phase name>`.
+7. Push the current branch to its GitHub remote. If no upstream is configured, push to `origin HEAD` and set upstream when appropriate.
+8. If commit or push cannot complete because of auth, missing remote, branch protection, merge conflicts, or environment restrictions, leave the completed work uncommitted or unpushed as appropriate, record the blocker in the final response, and do not start the next phase.
+9. Tell the user: `Phase <N> complete, committed, and pushed. Ask Codex to run execute-phase to continue with the next phase.`

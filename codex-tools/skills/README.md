@@ -2,7 +2,7 @@
 
 Personal Codex skills for project planning, phase execution, functional coverage review, and project design setup.
 
-These are translated from `claude-code-tools`, but they are not a one-to-one port. Codex does not have the `everything-claude-code` skill pack or Claude model routing, so the review workflow uses Codex's built-in code-review stance, local verification commands, and the `functional-coverage` skill.
+These are translated from `claude-code-tools`, but they are not a one-to-one port. Codex does not have the `everything-claude-code` skill pack or Claude model routing, so phase execution now hands phase-end review to the local `phase-review` skill.
 
 ## Install
 
@@ -35,13 +35,14 @@ The skill reads the supplied spec if there is one, discusses tradeoffs with you,
 
 Use when a project already has a `docs/plans/PLAN-*.md` and you want Codex to complete one phase.
 
-The skill executes a single phase, keeps `docs/progress/PROGRESS.md` current, runs local verification, performs a phase-end review bundle, updates the plan checkboxes, archives progress, then stops. It does not require `everything-claude-code`.
+The skill executes a single phase, keeps `docs/progress/PROGRESS.md` current, runs local verification, uses `phase-review` for the phase-end review, updates the plan checkboxes, archives progress, commits the phase, pushes it to GitHub, then stops. It does not require `everything-claude-code`.
 
-The phase-end review bundle is:
+The phase-end review uses `phase-review`, which includes:
 
 - Code review: bug and regression-focused review of the phase diff
 - Security review: auth, data exposure, injection, secrets, dependency, and destructive operation checks
 - Functional coverage: requirement-by-requirement implementation and test coverage review
+- Verification assessment: relevant lint, typecheck, build, and test command status
 
 ### `phase-review`
 
