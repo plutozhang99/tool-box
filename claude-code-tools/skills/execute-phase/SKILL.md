@@ -43,8 +43,9 @@ The user is the human above you. Trust the plan and the kickoff confirmation; do
    - **CRITICAL / HIGH** finding fixed → re-review **only the changed files** with one opus reviewer in the relevant lens
    - **MEDIUM / LOW** finding fixed → fixer self-checks (lint + build + test pass) is sufficient
 8. **Update PLAN.md once at the end.** Tick `[x]` on the phase header and every completed `Tx.x`. Fill in the `Decisions made during this phase` block. One consolidated edit.
-9. **Archive PROGRESS.md.** Move it to `docs/archive/PROGRESS-<phase-id>-<YYYYMMDD>.md`.
-10. **Stop.** Tell the user: "Phase X complete. Run `/execute-phase` to continue with Phase X+1." Do not auto-start the next phase.
+9. **Archive PROGRESS.md.** Derive `<plan-name>` from the PLAN filename (e.g. `PLAN-my-feature.md` → `my-feature`). Move the progress file to `docs/archive/<plan-name>/PROGRESS-<phase-id>-<YYYYMMDD>.md` (create the folder if it doesn't exist).
+10. **Archive PLAN.md when the plan is fully done.** After ticking all phase checkboxes, check if every phase in the plan is now `[x]`. If so, move the PLAN file to `docs/archive/plans/PLAN-<name>-<YYYYMMDD>.md` (create the folder if it doesn't exist) and tell the user the plan is complete and archived. Otherwise proceed to the next stop message.
+11. **Stop.** Tell the user: "Phase X complete. Run `/execute-phase` to continue with Phase X+1." Do not auto-start the next phase.
 
 ---
 
