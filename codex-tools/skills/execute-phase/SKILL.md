@@ -1,6 +1,6 @@
 ---
 name: execute-phase
-description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification, use phase-review for the phase-end review, update checkboxes, commit, push to GitHub, archive progress by plan, archive completed plans, then stop.
+description: Use when the user has a docs/plans/PLAN-*.md from plan-project and wants Codex to execute the next phase or a specified phase/task. Complete one phase per invocation, keep docs/progress/PROGRESS.md current, run local verification, use phase-review for the phase-end review, update checkboxes, commit, push to GitHub, archive progress by plan name, archive completed plans, then stop.
 ---
 
 # Execute Phase
@@ -94,11 +94,11 @@ When the confirmed scope passes review or the user accepts remaining risk:
 
 1. Update the relevant `PLAN.md` phase and task checkboxes from `[ ]` to `[x]`.
 2. Fill `Decisions Made During This Phase` with decisions and rationale discovered during implementation.
-3. Derive `<plan-id>` from the active plan filename without `.md` (for example, `docs/plans/PLAN-search.md` -> `PLAN-search`).
-4. Move `docs/progress/PROGRESS.md` to `docs/archive/progress/<plan-id>/PROGRESS-<phase-id>-<YYYYMMDD>.md`. Create the `<plan-id>` folder first if needed.
+3. Derive `<plan-file>` and `<plan-name>` from the active plan filename. For example, `docs/plans/PLAN-flutter-migration.md` has `<plan-file>` `PLAN-flutter-migration.md` and `<plan-name>` `flutter-migration`.
+4. Move `docs/progress/PROGRESS.md` to `docs/archive/<plan-name>/PROGRESS-<phase-id>-<YYYYMMDD>.md`. Create the `<plan-name>` folder first if needed.
 5. Check whether every phase and task in the active plan is now complete.
    - If the plan still has unchecked phase or task boxes, leave it in `docs/plans/`.
-   - If the plan is complete, move it to `docs/archive/plans/<plan-id>-<YYYYMMDD>.md`. Create `docs/archive/plans/` first if needed.
+   - If the plan is complete, move it to `docs/archive/plans/<plan-file>`. Create `docs/archive/plans/` first if needed.
 6. Inspect `git status --short` and `git diff` to identify only the files changed for this phase.
 7. Stage the phase implementation, plan update or archived completed plan, and archived progress file. Exclude unrelated user changes.
 8. Commit with a concise phase-scoped message, such as `Complete phase <N>: <phase name>`.
@@ -106,4 +106,4 @@ When the confirmed scope passes review or the user accepts remaining risk:
 10. If commit or push cannot complete because of auth, missing remote, branch protection, merge conflicts, or environment restrictions, leave the completed work uncommitted or unpushed as appropriate, record the blocker in the final response, and do not start the next phase.
 11. Tell the user:
     - If more phases remain: `Phase <N> complete, committed, and pushed. Ask Codex to run execute-phase to continue with the next phase.`
-    - If the plan is complete: `Plan <plan-id> complete, committed, pushed, and archived.`
+    - If the plan is complete: `Plan <plan-name> complete, committed, pushed, and archived.`
